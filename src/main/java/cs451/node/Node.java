@@ -1,6 +1,7 @@
 package cs451.node;
 
 import cs451.link.PerfectLink;
+import cs451.messages.LightMessage;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -15,21 +16,22 @@ public class Node implements NodeInterface {
     private final PerfectLink p2pLink;
     private final boolean isSender;
     private final String outputPath;
-    private final Queue<String> newMessages;
+    private final Queue<LightMessage> newMessages;
     Thread listeningThread;
     Thread newMessageThread;
     Thread sendingThread;
 
     // Can be extended using a list of hosts, instead of a single receiver (destIP,
     // destPort)
-    public Node(Host host, int destID, String destIP, int destPort, String outputPath) throws SocketException {
+    public Node(Host host, int destID, String outputPath) throws SocketException {
+        System.out.println("Node IP: " + host.getIp() + " port: " + host.getPort());
         this.outputPath = outputPath;
         this.pid = Integer.valueOf(host.getId()).byteValue();
         this.isSender = pid != destID;
         this.newMessages = new ConcurrentLinkedQueue<>();
 
         try {
-            this.p2pLink = new PerfectLink(pid, host.getIp(), host.getPort(), destIP, destPort);
+            this.p2pLink = new PerfectLink(pid, host.getIp(), host.getPort());
         } catch (SocketException e) {
             throw new SocketException("Error while creating node: " + e.getMessage());
         }
@@ -42,6 +44,7 @@ public class Node implements NodeInterface {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
+
         });
 
         sendingThread = new Thread(() -> {
@@ -49,7 +52,7 @@ public class Node implements NodeInterface {
 
             try {
                 p2pLink.sendAll();
-            } catch (IOException e) {
+            } catch (IOException | InterruptedException e) {
                 throw new RuntimeException(e);
             }
         });
@@ -57,7 +60,7 @@ public class Node implements NodeInterface {
         newMessageThread = new Thread(() -> {
             while (true) {
                 // pop last message
-                String newMessage = newMessages.poll();
+                LightMessage newMessage = newMessages.poll();
 
                 // send last message
                 if (newMessage != null) {
@@ -82,8 +85,8 @@ public class Node implements NodeInterface {
         }
     }
 
-    public void sendNewMessage(String payload) {
-        newMessages.offer(payload);
+    public void sendNewMessage(String payload, String destIP, int destPort) {
+        newMessages.offer(new LightMessage(payload, destIP, destPort));
     }
 
     public void initSignalHandlers() {

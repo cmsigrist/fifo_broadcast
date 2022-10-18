@@ -59,12 +59,12 @@ public class Main {
         int destPort = parser.hosts().get(destID - 1).getPort();
 
         System.out.println("Initializing node\n");
-        Node node = new Node(parser.hosts().get(parser.myId() - 1), destID, destIP, destPort, parser.output());
+        Node node = new Node(parser.hosts().get(parser.myId() - 1), destID, parser.output());
 
         node.start();
 
         for (int i = 1; i < numMessage + 1; i++) {
-            node.sendNewMessage(String.valueOf(i));
+            node.sendNewMessage(String.valueOf(i), destIP, destPort);
         }
 
         System.out.println("Broadcasting and delivering messages...\n");
