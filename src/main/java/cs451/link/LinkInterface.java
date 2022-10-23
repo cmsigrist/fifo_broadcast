@@ -7,7 +7,7 @@ import java.util.ArrayList;
 
 public interface LinkInterface {
     void send(LightMessage m) throws IOException;
-    void sendAll() throws IOException, InterruptedException;
+    // void waitForAck() throws IOException, InterruptedException;
     void deliver() throws IOException;
     ArrayList<String> getLogs();
 }

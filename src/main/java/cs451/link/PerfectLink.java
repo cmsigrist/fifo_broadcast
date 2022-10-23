@@ -3,27 +3,34 @@ package cs451.link;
 import cs451.messages.LightMessage;
 import cs451.messages.Message;
 import cs451.messages.MessageType;
+import cs451.messages.PendingAckMessage;
 import cs451.network.UDPChannel;
+import cs451.utils.AckTimerTask;
 
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class PerfectLink implements LinkInterface {
+public class PerfectLink implements LinkInterface, PropertyChangeListener {
     // pid associated with the source of the link
     private final byte pid;
     // UDP channel associated to the link
     private final UDPChannel UDPChannel;
-    private final HashMap<Integer, Message> sent;
-    private final ReentrantLock SLock;
+
+    private AckTimerTask ackTimerTask;
+    private final HashMap<Integer, PendingAckMessage> pendingAcks;
+    private final ReentrantLock PLock;
     private final ArrayList<String> logs;
     private final ReentrantLock LLock;
     private int seqNum = 0;
 
-    public PerfectLink(byte pid, String srcIp, int srcPort) throws SocketException {
+    public PerfectLink(byte pid, String srcIp, int srcPort, AckTimerTask ackTimerTask) throws SocketException {
         try {
             this.UDPChannel = new UDPChannel(srcIp, srcPort);
         } catch (SocketException e) {
@@ -31,10 +38,11 @@ public class PerfectLink implements LinkInterface {
         }
 
         this.pid = pid;
-        this.sent = new HashMap<>();
+        this.pendingAcks = new HashMap<>();//new ConcurrentLinkedQueue<>();
         this.logs = new ArrayList<>();
+        this.ackTimerTask = ackTimerTask;
 
-        this.SLock = new ReentrantLock();
+        this.PLock = new ReentrantLock();
         this.LLock = new ReentrantLock();
     }
 
@@ -48,37 +56,77 @@ public class PerfectLink implements LinkInterface {
         } catch (IOException e) {
             throw new IOException("Error while sending message: " + e.getMessage());
         } finally {
-            SLock.lock();
+            LLock.lock();
+            try {
+                String log = message.broadcast();
+                logs.add(log);
+            } finally {
+                LLock.unlock();
+            }
+
+            PLock.lock();
 
             try {
-                sent.put(seqNum, message);
+                PendingAckMessage pendingAckMessage = new PendingAckMessage(message, Instant.now(), ackTimerTask);
+                // ackTimerTask.addPropertyChangeListener(pendingAckMessage);
+                pendingAcks.put(seqNum, pendingAckMessage);
+                pendingAckMessage.addPropertyChangeListener(this);
+
                 System.out.println("Pid: " + pid + " sent packet: " + seqNum);
             } finally {
-                SLock.unlock();
+                PLock.unlock();
             }
         }
     }
 
     // Sends all the message
-    public void sendAll() throws IOException, InterruptedException {
-        ArrayList<Message> toSend;
-
+    /*public void waitForAck() throws IOException, InterruptedException {
+        ArrayList<PendingAckMessage> pending;
         while (true) {
-            // Get the latest copy of sent
-            SLock.lock();
+            // Try to resend if no ack has been received
+            PLock.lock();
+
             try {
-                toSend = new ArrayList<>(sent.values());
+                pending = new ArrayList<>(pendingAcks.values());
             } finally {
-                SLock.unlock();
+                PLock.unlock();
             }
 
-            System.out.println("toSend: " + toSend);
+            for (PendingAckMessage p : pending) {
+                Message message = p.getMessage();
+                int seqNum = message.getSeqNum();
 
-            for (Message m : toSend) {
-                try {
-                    P2PSend(m);
-                } catch (IOException e) {
-                    throw new IOException("Error while sending message: " + e.getMessage());
+                if (p.hasBeenAcked()) {
+                    PLock.lock();
+
+                    try {
+                        pendingAcks.remove(seqNum);
+                    } finally {
+                        PLock.unlock();
+                    }
+
+                    continue;
+                }
+
+                if (p.hasTimedOut()) {
+                    System.out.println("Resending seqNum: " + seqNum);
+
+                    try {
+                        P2PSend(message);
+                    } catch (IOException e) {
+                        throw new IOException("Error while sending message: " + e.getMessage());
+                    }
+
+                    PLock.lock();
+
+                    try {
+                        PendingAckMessage pendingAckMessage = pendingAcks.get(seqNum);
+                        pendingAckMessage.resetTimeout();
+                        System.out.println("Pid: " + pid + " sent packet: " + seqNum);
+                    } finally {
+                        PLock.unlock();
+                    }
+
                 }
             }
 
@@ -87,8 +135,8 @@ public class PerfectLink implements LinkInterface {
             } catch (InterruptedException e) {
                 throw new InterruptedException(e.getMessage());
             }
-         }
-    }
+        }
+    }*/
 
     private void P2PSend(Message message) throws IOException {
         byte[] packet = message.serialize();
@@ -96,8 +144,8 @@ public class PerfectLink implements LinkInterface {
 
         try {
             UDPChannel.send(d);
-        } catch (IOException e) {
-            throw new IOException(e.getMessage());
+        } catch (IOException ignored) {
+            // UDPChannel.send() error is ignored, on error just send it again anyway
         }
     }
 
@@ -125,21 +173,13 @@ public class PerfectLink implements LinkInterface {
 
                 if (message.getType() == MessageType.ACK_MESSAGE) {
                     // Received ack for message, no need to try to send it anymore
-                    SLock.lock();
-                    try {
-                        sent.remove(message.getSeqNum());
-                    } finally {
-                        SLock.unlock();
-                    }
+                    PLock.lock();
 
-                    LLock.lock();
                     try {
-                        String log = message.broadcast();
-                        if (!logs.contains(log)) {
-                            logs.add(log);
-                        }
+                        PendingAckMessage pendingAckMessage = pendingAcks.get(message.getSeqNum());
+                        pendingAckMessage.setAcked();
                     } finally {
-                        LLock.unlock();
+                        PLock.unlock();
                     }
                 }
 
@@ -163,14 +203,57 @@ public class PerfectLink implements LinkInterface {
         Message ackMessage = new Message(pid, message.getSeqNum(), srcIP, srcPort);
 
         try {
+            System.out.println("Sending ack for seqNum: " + message.getSeqNum() + " to: " + srcPort);
             P2PSend(ackMessage);
         } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("P2PDeliver Error when sending ACK: " + e.getMessage());
             throw new IOException(e.getMessage());
         }
     }
 
     public ArrayList<String> getLogs() {
         return new ArrayList<>(logs);
+    }
+
+    @Override
+    public void propertyChange(PropertyChangeEvent evt) {
+        // listen to change on ack and timer
+        String propertyName = evt.getPropertyName();
+        int seqNum = (int)evt.getOldValue();
+
+        if ("timeout".equals(propertyName)) {
+            System.out.println("PropertyChange thread : " + Thread.currentThread().getId() + " timeout: " + seqNum);
+
+            // resend
+            PendingAckMessage pendingAckMessage;
+            PLock.lock();
+
+            try {
+                pendingAckMessage = pendingAcks.get(seqNum);
+            } finally {
+                PLock.unlock();
+            }
+
+            try {
+                P2PSend(pendingAckMessage.getMessage());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        if ("acked".equals(propertyName)) {
+            System.out.println("PropertyChange thread : " + Thread.currentThread().getId() + " ack: " + seqNum);
+
+            PLock.lock();
+
+            try {
+                PendingAckMessage pendingAckMessage = pendingAcks.get(seqNum);
+                pendingAckMessage.removePropertyChangeListener(this);
+                pendingAcks.remove(seqNum);
+            } finally {
+                PLock.unlock();
+            }
+        }
+
     }
 }

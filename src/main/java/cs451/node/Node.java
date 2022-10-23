@@ -2,6 +2,8 @@ package cs451.node;
 
 import cs451.link.PerfectLink;
 import cs451.messages.LightMessage;
+import cs451.utils.AckTimer;
+import cs451.utils.AckTimerTask;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -17,9 +19,11 @@ public class Node implements NodeInterface {
     private final boolean isSender;
     private final String outputPath;
     private final Queue<LightMessage> newMessages;
+
+    AckTimerTask ackTimerTask;
     Thread listeningThread;
-    Thread newMessageThread;
-    Thread sendingThread;
+    Thread sendThread;
+    // Thread waitForAckThread;
 
     // Can be extended using a list of hosts, instead of a single receiver (destIP,
     // destPort)
@@ -29,9 +33,10 @@ public class Node implements NodeInterface {
         this.pid = Integer.valueOf(host.getId()).byteValue();
         this.isSender = pid != destID;
         this.newMessages = new ConcurrentLinkedQueue<>();
+        this.ackTimerTask = new AckTimerTask();
 
         try {
-            this.p2pLink = new PerfectLink(pid, host.getIp(), host.getPort());
+            this.p2pLink = new PerfectLink(pid, host.getIp(), host.getPort(), ackTimerTask);
         } catch (SocketException e) {
             throw new SocketException("Error while creating node: " + e.getMessage());
         }
@@ -47,17 +52,17 @@ public class Node implements NodeInterface {
 
         });
 
-        sendingThread = new Thread(() -> {
+        /*waitForAckThread = new Thread(() -> {
             System.out.println("Pid: " + pid + " starting broadcast");
 
             try {
-                p2pLink.sendAll();
+                p2pLink.waitForAck();
             } catch (IOException | InterruptedException e) {
                 throw new RuntimeException(e);
             }
-        });
+        });*/
 
-        newMessageThread = new Thread(() -> {
+        sendThread = new Thread(() -> {
             while (true) {
                 // pop last message
                 LightMessage newMessage = newMessages.poll();
@@ -77,11 +82,13 @@ public class Node implements NodeInterface {
     }
 
     public void start() {
+        System.out.println("Starting node");
+        AckTimer.startTimer(ackTimerTask);
         listeningThread.start();
 
         if (isSender) {
-            newMessageThread.start();
-            sendingThread.start();
+            sendThread.start();
+            //waitForAckThread.start();
         }
     }
 

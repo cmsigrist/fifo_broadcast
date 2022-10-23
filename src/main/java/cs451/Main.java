@@ -9,7 +9,7 @@ import cs451.node.Node;
 import cs451.parser.Parser;
 
 public class Main {
-    private static final int MAX_THREADS = 256;
+    private static final int MAX_THREADS = 170; // Each node uses 6 threads: floor(1024 / 6) = 170 nodes
 
     private static void handleSignal() {
         // immediately stop network packet processing
@@ -34,7 +34,7 @@ public class Main {
 
         initSignalHandlers();
 
-        // Give 4 threads per node (2 to send, 1 to listen, 1 for the main)
+        // Give 6 threads per node (1 to send, 1 to listen, 1 for time out, 1 for acks, 1 for timer, 1 for the main)
         assert parser.hosts().size() <= MAX_THREADS;
 
         System.out.println("Doing some initialization\n");
