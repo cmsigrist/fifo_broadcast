@@ -5,6 +5,7 @@ import cs451.messages.Message;
 import cs451.messages.MessageType;
 import cs451.messages.PendingAckMessage;
 import cs451.network.UDPChannel;
+import cs451.utils.AckTimerTask;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -14,7 +15,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class PerfectLink implements LinkInterface {
+public class P2PLinkPoll implements LinkInterface {
     // pid associated with the source of the link
     private final byte pid;
     // UDP channel associated to the link
@@ -25,7 +26,7 @@ public class PerfectLink implements LinkInterface {
     private final ReentrantLock LLock;
     private int seqNum = 0;
 
-    public PerfectLink(byte pid, String srcIp, int srcPort) throws SocketException {
+    public P2PLinkPoll(byte pid, String srcIp, int srcPort) throws SocketException {
         try {
             this.UDPChannel = new UDPChannel(srcIp, srcPort);
         } catch (SocketException e) {
@@ -87,7 +88,7 @@ public class PerfectLink implements LinkInterface {
                 Message message = p.getMessage();
                 int seqNum = message.getSeqNum();
 
-                if (p.isAcked()) {
+                if (p.hasBeenAcked()) {
                     PLock.lock();
                     try {
                         pendingAcks.remove(p.getKey());
@@ -96,7 +97,6 @@ public class PerfectLink implements LinkInterface {
                     }
                     continue;
                 }
-
                 if (p.hasTimedOut()) {
                     System.out.println("Resending seqNum: " + seqNum);
                     try {
@@ -104,7 +104,6 @@ public class PerfectLink implements LinkInterface {
                     } catch (IOException e) {
                         throw new IOException("Error while sending message: " + e.getMessage());
                     }
-
                     PLock.lock();
                     try {
                         PendingAckMessage pendingAckMessage = pendingAcks.get(p.getKey());
@@ -115,7 +114,6 @@ public class PerfectLink implements LinkInterface {
                     }
                 }
             }
-
             try {
                 Thread.sleep(100);
             } catch (InterruptedException e) {
@@ -164,8 +162,13 @@ public class PerfectLink implements LinkInterface {
 
                     try {
                         PendingAckMessage pendingAckMessage = pendingAcks.get(key);
-                        pendingAckMessage.setAcked();
 
+                        // If the timeout happened before, and the ack after, then the same
+                        // message will be sent twice, and the ack received twice.
+                        // We only process it once (and remove it from the list of pendingAcks).
+                        if (pendingAckMessage != null) {
+                            pendingAckMessage.setAcked();
+                        }
                     } finally {
                         PLock.unlock();
                     }
