@@ -14,9 +14,7 @@ public class PendingAckMessage implements PropertyChangeListener {
     // The address of the node from which we wait an ack
     private final String destIP;
     private final int destPort;
-    private boolean acked;
-
-    private AckTimerTask ackTimerTask;
+    private final AckTimerTask ackTimerTask;
     public static final int ACK_TIMEOUT = 500; // in milli
 
     private final PropertyChangeSupport mPcs = new PropertyChangeSupport(this);
@@ -26,7 +24,6 @@ public class PendingAckMessage implements PropertyChangeListener {
         this.start = start;
         this.destIP = message.getDestIP();
         this.destPort = message.getDestPort();
-        this.acked = false;
         this.ackTimerTask = ackTimerTask;
 
         ackTimerTask.addPropertyChangeListener(this);
@@ -36,34 +33,19 @@ public class PendingAckMessage implements PropertyChangeListener {
         return message;
     }
 
-    public String getDestIP() {
-        return destIP;
-    }
-
-    public int getDestPort() {
-        return destPort;
-    }
-
     public void setAcked() {
-        this.acked = true;
         mPcs.firePropertyChange("acked",
-                message.getSeqNum(), true);
-        // TODO unregister from timer
+                message.getSeqNum() + destIP + destPort, true);
+
         ackTimerTask.removePropertyChangeListener(this);
     }
 
-    public boolean hasBeenAcked() {
-        return this.acked;
+    public String getKey() {
+        return message.getSeqNum() + destIP + destPort;
     }
 
-    public boolean hasTimedOut() {
-        Instant now = Instant.now();
-
-        return Duration.between(start, now).toMillis() >= ACK_TIMEOUT;
-    }
-
-    public void resetTimeout() {
-        this.start = Instant.now();
+    public static String makeKey(int seqNum, String destIP, int destPort) {
+        return seqNum + destIP + destPort;
     }
 
     public void addPropertyChangeListener(PropertyChangeListener listener) {
@@ -84,7 +66,7 @@ public class PendingAckMessage implements PropertyChangeListener {
 
             if (Duration.between(start, now).toMillis() >= ACK_TIMEOUT) {
                 mPcs.firePropertyChange("timeout",
-                        message.getSeqNum(), true);
+                        message.getSeqNum() + destIP + destPort, true);
 
                 this.start = Instant.now();
             }

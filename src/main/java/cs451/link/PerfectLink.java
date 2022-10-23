@@ -23,8 +23,8 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
     // UDP channel associated to the link
     private final UDPChannel UDPChannel;
 
-    private AckTimerTask ackTimerTask;
-    private final HashMap<Integer, PendingAckMessage> pendingAcks;
+    private final AckTimerTask ackTimerTask;
+    private final HashMap<String, PendingAckMessage> pendingAcks;
     private final ReentrantLock PLock;
     private final ArrayList<String> logs;
     private final ReentrantLock LLock;
@@ -38,7 +38,7 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
         }
 
         this.pid = pid;
-        this.pendingAcks = new HashMap<>();//new ConcurrentLinkedQueue<>();
+        this.pendingAcks = new HashMap<>();
         this.logs = new ArrayList<>();
         this.ackTimerTask = ackTimerTask;
 
@@ -68,8 +68,7 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
 
             try {
                 PendingAckMessage pendingAckMessage = new PendingAckMessage(message, Instant.now(), ackTimerTask);
-                // ackTimerTask.addPropertyChangeListener(pendingAckMessage);
-                pendingAcks.put(seqNum, pendingAckMessage);
+                pendingAcks.put(pendingAckMessage.getKey(), pendingAckMessage);
                 pendingAckMessage.addPropertyChangeListener(this);
 
                 System.out.println("Pid: " + pid + " sent packet: " + seqNum);
@@ -78,65 +77,6 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
             }
         }
     }
-
-    // Sends all the message
-    /*public void waitForAck() throws IOException, InterruptedException {
-        ArrayList<PendingAckMessage> pending;
-        while (true) {
-            // Try to resend if no ack has been received
-            PLock.lock();
-
-            try {
-                pending = new ArrayList<>(pendingAcks.values());
-            } finally {
-                PLock.unlock();
-            }
-
-            for (PendingAckMessage p : pending) {
-                Message message = p.getMessage();
-                int seqNum = message.getSeqNum();
-
-                if (p.hasBeenAcked()) {
-                    PLock.lock();
-
-                    try {
-                        pendingAcks.remove(seqNum);
-                    } finally {
-                        PLock.unlock();
-                    }
-
-                    continue;
-                }
-
-                if (p.hasTimedOut()) {
-                    System.out.println("Resending seqNum: " + seqNum);
-
-                    try {
-                        P2PSend(message);
-                    } catch (IOException e) {
-                        throw new IOException("Error while sending message: " + e.getMessage());
-                    }
-
-                    PLock.lock();
-
-                    try {
-                        PendingAckMessage pendingAckMessage = pendingAcks.get(seqNum);
-                        pendingAckMessage.resetTimeout();
-                        System.out.println("Pid: " + pid + " sent packet: " + seqNum);
-                    } finally {
-                        PLock.unlock();
-                    }
-
-                }
-            }
-
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                throw new InterruptedException(e.getMessage());
-            }
-        }
-    }*/
 
     private void P2PSend(Message message) throws IOException {
         byte[] packet = message.serialize();
@@ -173,11 +113,18 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
 
                 if (message.getType() == MessageType.ACK_MESSAGE) {
                     // Received ack for message, no need to try to send it anymore
+                    String key = PendingAckMessage.makeKey(message.getSeqNum(), srcIP, srcPort);
                     PLock.lock();
 
                     try {
-                        PendingAckMessage pendingAckMessage = pendingAcks.get(message.getSeqNum());
-                        pendingAckMessage.setAcked();
+                        PendingAckMessage pendingAckMessage = pendingAcks.get(key);
+
+                        // If the timeout happened before, and the ack after, then the same
+                        // message will be sent twice, and the ack received twice.
+                        // We only process it once (and remove it from the list of pendingAcks).
+                        if (pendingAckMessage != null) {
+                            pendingAckMessage.setAcked();
+                        }
                     } finally {
                         PLock.unlock();
                     }
@@ -191,6 +138,7 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
 
     private void P2PDeliver(Message message, String srcIP, int srcPort) throws IOException {
         LLock.lock();
+
         try {
             String log = message.delivered();
             if (!logs.contains(log)) {
@@ -217,9 +165,23 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
 
     @Override
     public void propertyChange(PropertyChangeEvent evt) {
-        // listen to change on ack and timer
+        // listen to change on ack and timeout
         String propertyName = evt.getPropertyName();
-        int seqNum = (int)evt.getOldValue();
+        String key = (String)evt.getOldValue();
+
+        if ("acked".equals(propertyName)) {
+            System.out.println("PropertyChange thread : " + Thread.currentThread().getId() + " ack: " + seqNum);
+
+            PLock.lock();
+
+            try {
+                PendingAckMessage pendingAckMessage = pendingAcks.get(key);
+                pendingAckMessage.removePropertyChangeListener(this);
+                pendingAcks.remove(key);
+            } finally {
+                PLock.unlock();
+            }
+        }
 
         if ("timeout".equals(propertyName)) {
             System.out.println("PropertyChange thread : " + Thread.currentThread().getId() + " timeout: " + seqNum);
@@ -229,7 +191,7 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
             PLock.lock();
 
             try {
-                pendingAckMessage = pendingAcks.get(seqNum);
+                pendingAckMessage = pendingAcks.get(key);
             } finally {
                 PLock.unlock();
             }
@@ -240,20 +202,5 @@ public class PerfectLink implements LinkInterface, PropertyChangeListener {
                 throw new RuntimeException(e);
             }
         }
-
-        if ("acked".equals(propertyName)) {
-            System.out.println("PropertyChange thread : " + Thread.currentThread().getId() + " ack: " + seqNum);
-
-            PLock.lock();
-
-            try {
-                PendingAckMessage pendingAckMessage = pendingAcks.get(seqNum);
-                pendingAckMessage.removePropertyChangeListener(this);
-                pendingAcks.remove(seqNum);
-            } finally {
-                PLock.unlock();
-            }
-        }
-
     }
 }

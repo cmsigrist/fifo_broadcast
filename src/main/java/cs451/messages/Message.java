@@ -11,12 +11,9 @@ public class Message implements MessageInterface{
     // process that sent the message
     private final byte pid;
     private final int seqNum;
-
     private final String destIP;
     private final int destPort;
-
     private final String payload;
-
     private final MessageType type;
     public static final int typeIndex = 0;
     public static final int pidIndex = 1;

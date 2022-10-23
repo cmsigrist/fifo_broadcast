@@ -23,7 +23,6 @@ public class Node implements NodeInterface {
     AckTimerTask ackTimerTask;
     Thread listeningThread;
     Thread sendThread;
-    // Thread waitForAckThread;
 
     // Can be extended using a list of hosts, instead of a single receiver (destIP,
     // destPort)
@@ -52,16 +51,6 @@ public class Node implements NodeInterface {
 
         });
 
-        /*waitForAckThread = new Thread(() -> {
-            System.out.println("Pid: " + pid + " starting broadcast");
-
-            try {
-                p2pLink.waitForAck();
-            } catch (IOException | InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        });*/
-
         sendThread = new Thread(() -> {
             while (true) {
                 // pop last message
@@ -88,7 +77,6 @@ public class Node implements NodeInterface {
 
         if (isSender) {
             sendThread.start();
-            //waitForAckThread.start();
         }
     }
 
