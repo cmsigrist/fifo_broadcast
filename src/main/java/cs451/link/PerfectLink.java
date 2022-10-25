@@ -75,7 +75,7 @@ public class PerfectLink implements LinkInterface {
     public void waitForAck() throws IOException, InterruptedException {
         ArrayList<PendingAckMessage> pending;
         while (true) {
-            // Try to resend if no ack has been received
+            // Snapshot
             PLock.lock();
             try {
                 pending = new ArrayList<>(pendingAcks.values());
@@ -98,17 +98,20 @@ public class PerfectLink implements LinkInterface {
                 }
 
                 if (p.hasTimedOut()) {
-                    System.out.println("Resending seqNum: " + seqNum);
-                    try {
-                        P2PSend(message);
-                    } catch (IOException e) {
-                        throw new IOException("Error while sending message: " + e.getMessage());
-                    }
-
                     PLock.lock();
                     try {
+                        // Check if it hasn't been acked in the meantime
                         PendingAckMessage pendingAckMessage = pendingAcks.get(p.getKey());
-                        pendingAckMessage.resetTimeout();
+
+                        if (pendingAckMessage != null) {
+                            try {
+                                P2PSend(message);
+                            } catch (IOException e) {
+                                throw new IOException("Error while sending message: " + e.getMessage());
+                            }
+
+                            pendingAckMessage.resetTimeout();
+                        }
                         System.out.println("Pid: " + pid + " sent packet: " + seqNum);
                     } finally {
                         PLock.unlock();
@@ -164,7 +167,10 @@ public class PerfectLink implements LinkInterface {
 
                     try {
                         PendingAckMessage pendingAckMessage = pendingAcks.get(key);
-                        pendingAckMessage.setAcked();
+
+                        if (pendingAckMessage != null) {
+                            pendingAckMessage.setAcked();
+                        }
 
                     } finally {
                         PLock.unlock();
