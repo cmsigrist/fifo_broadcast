@@ -26,8 +26,10 @@ public class Node implements NodeInterface {
     public Node(Host host, int destID, String outputPath) throws SocketException {
         System.out.println("Node IP: " + host.getIp() + " port: " + host.getPort());
         this.outputPath = outputPath;
-        this.pid = Integer.valueOf(host.getId()).byteValue();
-        this.isSender = pid != destID;
+
+        // pid in [1, 128] shift of -1 so that it fits in a byte
+        this.pid = Integer.valueOf(host.getId() - 1).byteValue();
+        this.isSender = host.getId() != destID;
         this.newMessages = new ConcurrentLinkedQueue<>();
 
         try {
