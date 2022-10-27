@@ -39,7 +39,7 @@ public class Node implements NodeInterface {
         }
 
         listeningThread = new Thread(() -> {
-            System.out.println("Pid: " + pid + " starting to listen");
+            System.out.println("Pid: " + Integer.valueOf(pid + 1).toString() + " starting to listen");
 
             try {
                 p2pLink.deliver();
@@ -50,7 +50,7 @@ public class Node implements NodeInterface {
         });
 
         waitForAckThread = new Thread(() -> {
-            System.out.println("Pid: " + pid + " starting broadcast");
+            System.out.println("Pid: " + Integer.valueOf(pid + 1).toString() + " starting broadcast");
 
             try {
                 p2pLink.waitForAck();

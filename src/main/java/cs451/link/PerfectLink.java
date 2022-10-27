@@ -64,7 +64,7 @@ public class PerfectLink implements LinkInterface {
                 PendingAckMessage pendingAckMessage = new PendingAckMessage(message, Instant.now());
                 pendingAcks.put(pendingAckMessage.getKey(), pendingAckMessage);
 
-                System.out.println("Pid: " + pid + " sent packet: " + seqNum);
+                // System.out.println("Sent packet: " + seqNum);
             } finally {
                 PLock.unlock();
             }
@@ -112,7 +112,7 @@ public class PerfectLink implements LinkInterface {
 
                             pendingAckMessage.resetTimeout();
                         }
-                        System.out.println("Pid: " + pid + " sent packet: " + seqNum);
+                        // System.out.println("Sent packet: " + seqNum);
                     } finally {
                         PLock.unlock();
                     }
@@ -197,10 +197,10 @@ public class PerfectLink implements LinkInterface {
         Message ackMessage = new Message(pid, message.getSeqNum(), srcIP, srcPort);
 
         try {
-            System.out.println("Sending ack for seqNum: " + message.getSeqNum() + " to: " + srcPort);
+            // System.out.println("Sending ack for seqNum: " + message.getSeqNum() + " to: " + srcPort);
             P2PSend(ackMessage);
         } catch (IOException e) {
-            System.out.println("P2PDeliver Error when sending ACK: " + e.getMessage());
+            // System.out.println("P2PDeliver Error when sending ACK: " + e.getMessage());
             throw new IOException(e.getMessage());
         }
     }
