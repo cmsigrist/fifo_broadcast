@@ -7,7 +7,7 @@ import java.util.Arrays;
 
 import static cs451.network.UDPChannel.MAX_SIZE;
 
-public class Message implements MessageInterface{
+public class Message implements MessageInterface {
     // process that sent the message
     private final byte pid;
     private final int seqNum;
@@ -29,6 +29,7 @@ public class Message implements MessageInterface{
         this.payload = payload;
         this.type = type;
     }
+
     public Message(byte pid, int seqNum, String destIP, int destPort, String payload) {
         this.pid = pid;
         this.seqNum = seqNum;
@@ -121,7 +122,7 @@ public class Message implements MessageInterface{
         if (o instanceof Message) {
             return ((Message) o).getPid() == pid &&
                     ((Message) o).getSeqNum() == seqNum &&
-                     ((Message) o).getPayload().equals(payload);
+                    ((Message) o).getPayload().equals(payload);
         }
 
         return false;

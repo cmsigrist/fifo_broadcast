@@ -10,7 +10,7 @@ public class PendingAckMessage {
     private final String destIP;
     private final int destPort;
     private boolean isAcked = false;
-    public static final int ACK_TIMEOUT = 500; // in milli
+    public static final int ACK_TIMEOUT = 500; // in milliseconds
 
     public PendingAckMessage(Message message, Instant start) {
         this.message = message;

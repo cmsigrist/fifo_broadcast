@@ -2,6 +2,8 @@ package cs451.node;
 
 public interface NodeInterface {
     void start();
-    void sendNewMessage(String payload, String destIP, int destPort);
+
+    void broadcastNewMessage(String payload);
+
     public void writeOutput();
 }

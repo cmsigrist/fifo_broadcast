@@ -3,8 +3,10 @@ package cs451;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.net.SocketException;
+import java.util.ArrayList;
 import java.util.Scanner;
 
+import cs451.node.Host;
 import cs451.node.Node;
 import cs451.parser.Parser;
 
@@ -34,7 +36,8 @@ public class Main {
 
         initSignalHandlers();
 
-        // Give 6 threads per node (1 to send, 1 to listen, 1 for time out, 1 for acks, 1 for timer, 1 for the main)
+        // Give 6 threads per node (1 to send, 1 to listen, 1 for sig handler, 1 for
+        // acks, 1 for the main, 1 for heartbeat)
         assert parser.hosts().size() <= MAX_THREADS;
 
         System.out.println("Doing some initialization\n");
@@ -54,17 +57,19 @@ public class Main {
         String[] config = conf.split(" ");
 
         int numMessage = Integer.parseInt(config[0]);
-        int destID = Integer.parseInt(config[1]);
-        String destIP = parser.hosts().get(destID - 1).getIp();
-        int destPort = parser.hosts().get(destID - 1).getPort();
+
+        Host host = parser.hosts().get(parser.myId() - 1);
+
+        // Include the node itself
+        ArrayList<Host> peers = new ArrayList<>(parser.hosts());
 
         System.out.println("Initializing node\n");
-        Node node = new Node(parser.hosts().get(parser.myId() - 1), destID, parser.output());
+        Node node = new Node(host, parser.output(), peers);
 
         node.start();
 
         for (int i = 1; i < numMessage + 1; i++) {
-            node.sendNewMessage(String.valueOf(i), destIP, destPort);
+            node.broadcastNewMessage(String.valueOf(i));
         }
 
         System.out.println("Broadcasting and delivering messages...\n");

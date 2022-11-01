@@ -1,18 +1,20 @@
 package cs451.link;
 
-import cs451.messages.LightMessage;
-import cs451.messages.Message;
-import cs451.messages.MessageType;
-import cs451.messages.PendingAckMessage;
-import cs451.network.UDPChannel;
-
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.concurrent.locks.ReentrantLock;
+
+import cs451.messages.LightMessage;
+import cs451.messages.Message;
+import cs451.messages.MessageType;
+import cs451.messages.PendingAckMessage;
+import cs451.network.UDPChannel;
 
 public class PerfectLink implements LinkInterface {
     // pid associated with the source of the link
@@ -20,6 +22,9 @@ public class PerfectLink implements LinkInterface {
     // UDP channel associated to the link
     private final UDPChannel UDPChannel;
     private final HashMap<String, PendingAckMessage> pendingAcks;
+    // List containing the keys of messages that were acked
+    private final HashSet<String> ackedMessage;
+
     private final ReentrantLock PLock;
     private final ArrayList<String> logs;
     private final ReentrantLock LLock;
@@ -34,6 +39,7 @@ public class PerfectLink implements LinkInterface {
 
         this.pid = pid;
         this.pendingAcks = new HashMap<>();
+        this.ackedMessage = new HashSet<>();
         this.logs = new ArrayList<>();
 
         this.PLock = new ReentrantLock();
@@ -85,9 +91,10 @@ public class PerfectLink implements LinkInterface {
 
             for (PendingAckMessage p : pending) {
                 Message message = p.getMessage();
-                int seqNum = message.getSeqNum();
 
                 if (p.isAcked()) {
+                    ackedMessage.add(p.getKey());
+
                     PLock.lock();
                     try {
                         pendingAcks.remove(p.getKey());
@@ -129,7 +136,8 @@ public class PerfectLink implements LinkInterface {
 
     private void P2PSend(Message message) throws IOException {
         byte[] packet = message.serialize();
-        DatagramPacket d = new DatagramPacket(packet, packet.length, InetAddress.getByName(message.getDestIP()), message.getDestPort());
+        DatagramPacket d = new DatagramPacket(packet, packet.length, InetAddress.getByName(message.getDestIP()),
+                message.getDestPort());
 
         try {
             UDPChannel.send(d);
@@ -197,7 +205,8 @@ public class PerfectLink implements LinkInterface {
         Message ackMessage = new Message(pid, message.getSeqNum(), srcIP, srcPort);
 
         try {
-            // System.out.println("Sending ack for seqNum: " + message.getSeqNum() + " to: " + srcPort);
+            // System.out.println("Sending ack for seqNum: " + message.getSeqNum() + " to: "
+            // + srcPort);
             P2PSend(ackMessage);
         } catch (IOException e) {
             // System.out.println("P2PDeliver Error when sending ACK: " + e.getMessage());
@@ -207,5 +216,9 @@ public class PerfectLink implements LinkInterface {
 
     public ArrayList<String> getLogs() {
         return new ArrayList<>(logs);
+    }
+
+    public HashSet<String> getAckedMessage() {
+        return ackedMessage;
     }
 }

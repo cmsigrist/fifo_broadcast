@@ -1,8 +1,5 @@
 package cs451.node;
 
-import cs451.link.PerfectLink;
-import cs451.messages.LightMessage;
-
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -11,29 +8,31 @@ import java.util.ArrayList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import cs451.broadcast.FIFOBroadcast;
+
 public class Node implements NodeInterface {
     private final byte pid;
-    private final PerfectLink p2pLink;
-    private final boolean isSender;
     private final String outputPath;
-    private final Queue<LightMessage> newMessages;
+    private final Queue<String> newMessages;
+
+    private final FIFOBroadcast fifoBroadcast;
+
     Thread listeningThread;
     Thread sendThread;
     Thread waitForAckThread;
 
     // Can be extended using a list of hosts, instead of a single receiver (destIP,
     // destPort)
-    public Node(Host host, int destID, String outputPath) throws SocketException {
+    public Node(Host host, String outputPath, ArrayList<Host> peers) throws SocketException {
         System.out.println("Node IP: " + host.getIp() + " port: " + host.getPort());
         this.outputPath = outputPath;
 
         // pid in [1, 128] shift of -1 so that it fits in a byte
         this.pid = Integer.valueOf(host.getId() - 1).byteValue();
-        this.isSender = host.getId() != destID;
         this.newMessages = new ConcurrentLinkedQueue<>();
 
         try {
-            this.p2pLink = new PerfectLink(pid, host.getIp(), host.getPort());
+            this.fifoBroadcast = new FIFOBroadcast(pid, outputPath, pid, peers);
         } catch (SocketException e) {
             throw new SocketException("Error while creating node: " + e.getMessage());
         }
@@ -42,7 +41,7 @@ public class Node implements NodeInterface {
             System.out.println("Pid: " + Integer.valueOf(pid + 1).toString() + " starting to listen");
 
             try {
-                p2pLink.deliver();
+                fifoBroadcast.deliver();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -53,7 +52,7 @@ public class Node implements NodeInterface {
             System.out.println("Pid: " + Integer.valueOf(pid + 1).toString() + " starting broadcast");
 
             try {
-                p2pLink.waitForAck();
+                fifoBroadcast.waitForAck();
             } catch (IOException | InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -62,12 +61,12 @@ public class Node implements NodeInterface {
         sendThread = new Thread(() -> {
             while (true) {
                 // pop last message
-                LightMessage newMessage = newMessages.poll();
+                String newMessage = newMessages.poll();
 
                 // send last message
                 if (newMessage != null) {
                     try {
-                        p2pLink.send(newMessage);
+                        fifoBroadcast.broadcast(newMessage);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -82,14 +81,13 @@ public class Node implements NodeInterface {
         System.out.println("Starting node");
         listeningThread.start();
 
-        if (isSender) {
-            sendThread.start();
-            waitForAckThread.start();
-        }
+        sendThread.start();
+        waitForAckThread.start();
     }
 
-    public void sendNewMessage(String payload, String destIP, int destPort) {
-        newMessages.offer(new LightMessage(payload, destIP, destPort));
+    @Override
+    public void broadcastNewMessage(String payload) {
+        newMessages.offer(payload);
     }
 
     public void initSignalHandlers() {
@@ -97,7 +95,7 @@ public class Node implements NodeInterface {
     }
 
     public void writeOutput() {
-        ArrayList<String> logs = p2pLink.getLogs();
+        ArrayList<String> logs = fifoBroadcast.getLogs();
 
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath));

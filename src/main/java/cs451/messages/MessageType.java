@@ -4,4 +4,3 @@ public enum MessageType {
     CHAT_MESSAGE,
     ACK_MESSAGE
 }
-
