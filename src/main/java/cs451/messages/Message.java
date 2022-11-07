@@ -132,10 +132,10 @@ public class Message implements MessageInterface{
     }
 
     public String delivered() {
-        return "d " + this.getPid() + " " + this.getSeqNum() + "\n";
+        return "d " + Integer.valueOf(pid + 1).toString() + " " + seqNum + "\n";
     }
 
     public String broadcast() {
-        return "b " + this.getSeqNum() + "\n";
+        return "b " + seqNum + "\n";
     }
 }

@@ -1,32 +1,22 @@
 package cs451.messages;
 
-import cs451.utils.AckTimerTask;
-
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.beans.PropertyChangeSupport;
 import java.time.Duration;
 import java.time.Instant;
 
-public class PendingAckMessage implements PropertyChangeListener {
+public class PendingAckMessage {
     Message message;
     private Instant start;
     // The address of the node from which we wait an ack
     private final String destIP;
     private final int destPort;
-    private final AckTimerTask ackTimerTask;
+    private boolean isAcked = false;
     public static final int ACK_TIMEOUT = 500; // in milli
 
-    private final PropertyChangeSupport mPcs = new PropertyChangeSupport(this);
-
-    public PendingAckMessage(Message message, Instant start, AckTimerTask ackTimerTask) {
+    public PendingAckMessage(Message message, Instant start) {
         this.message = message;
         this.start = start;
         this.destIP = message.getDestIP();
         this.destPort = message.getDestPort();
-        this.ackTimerTask = ackTimerTask;
-
-        ackTimerTask.addPropertyChangeListener(this);
     }
 
     public Message getMessage() {
@@ -34,10 +24,19 @@ public class PendingAckMessage implements PropertyChangeListener {
     }
 
     public void setAcked() {
-        mPcs.firePropertyChange("acked",
-                message.getSeqNum() + destIP + destPort, true);
+        this.isAcked = true;
+    }
 
-        ackTimerTask.removePropertyChangeListener(this);
+    public boolean isAcked() {
+        return isAcked;
+    }
+
+    public boolean hasTimedOut() {
+        return Duration.between(start, Instant.now()).toMillis() >= ACK_TIMEOUT;
+    }
+
+    public void resetTimeout() {
+        this.start = Instant.now();
     }
 
     public String getKey() {
@@ -46,30 +45,5 @@ public class PendingAckMessage implements PropertyChangeListener {
 
     public static String makeKey(int seqNum, String destIP, int destPort) {
         return seqNum + destIP + destPort;
-    }
-
-    public void addPropertyChangeListener(PropertyChangeListener listener) {
-        mPcs.addPropertyChangeListener(listener);
-    }
-
-    public void removePropertyChangeListener(PropertyChangeListener listener) {
-        mPcs.removePropertyChangeListener(listener);
-    }
-
-    @Override
-    public void propertyChange(PropertyChangeEvent evt) {
-        String propertyName = evt.getPropertyName();
-
-        if ("timer".equals(propertyName)) {
-            System.out.println("PropertyChange in pending ack thread : " + Thread.currentThread().getId() + " timeout: ");
-            Instant now = (Instant)evt.getNewValue();
-
-            if (Duration.between(start, now).toMillis() >= ACK_TIMEOUT) {
-                mPcs.firePropertyChange("timeout",
-                        message.getSeqNum() + destIP + destPort, true);
-
-                this.start = Instant.now();
-            }
-        }
     }
 }
