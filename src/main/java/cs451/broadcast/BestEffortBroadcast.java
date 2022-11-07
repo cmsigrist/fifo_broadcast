@@ -52,7 +52,9 @@ public class BestEffortBroadcast implements BroadcastInterface {
   @Override
   public void broadcast(String m) throws IOException {
     for (Host peer : peers) {
-      p2pLink.send(new LightMessage(m, peer.getIp(), peer.getPort()));
+      if (peer.getId() == 2) {
+        p2pLink.send(new LightMessage(m, peer.getIp(), peer.getPort()));
+      }
     }
   }
 

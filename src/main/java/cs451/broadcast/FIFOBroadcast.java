@@ -5,6 +5,7 @@ import java.net.SocketException;
 import java.util.ArrayList;
 
 import cs451.node.Host;
+import cs451.types.AtomicArrayList;
 
 public class FIFOBroadcast implements BroadcastInterface {
   private final byte pid;
@@ -12,7 +13,9 @@ public class FIFOBroadcast implements BroadcastInterface {
   private final int srcPort;
   private final ArrayList<Host> peers;
 
-  private final ReliableBroadcast reliableBroadcast;
+  private final UniformReliableBroadcast uniformReliableBroadcast;
+
+  private final AtomicArrayList<String> past;
 
   public FIFOBroadcast(byte pid, String srcIP, int srcPort, ArrayList<Host> peers) throws SocketException {
     this.pid = pid;
@@ -20,8 +23,10 @@ public class FIFOBroadcast implements BroadcastInterface {
     this.srcPort = srcPort;
     this.peers = peers;
 
+    this.past = new AtomicArrayList<>();
+
     try {
-      this.reliableBroadcast = new ReliableBroadcast(pid, srcIP, srcPort, peers);
+      this.uniformReliableBroadcast = new UniformReliableBroadcast(pid, srcIP, srcPort, peers);
     } catch (SocketException e) {
       throw new SocketException("Error while creating node: " + e.getMessage());
     }
@@ -43,30 +48,33 @@ public class FIFOBroadcast implements BroadcastInterface {
     return peers;
   }
 
-  public ReliableBroadcast getReliableBroadcast() {
-    return reliableBroadcast;
+  public UniformReliableBroadcast getReliableBroadcast() {
+    return uniformReliableBroadcast;
   }
 
   @Override
   public void broadcast(String m) throws IOException {
     // TODO Auto-generated method stub
+    uniformReliableBroadcast.broadcast(m);
 
   }
 
   @Override
   public void deliver() throws IOException {
     // TODO Auto-generated method stub
+    uniformReliableBroadcast.deliver();
 
   }
 
   @Override
   public void waitForAck() throws IOException, InterruptedException {
     // TODO Auto-generated method stub
+    uniformReliableBroadcast.waitForAck();
 
   }
 
   @Override
   public ArrayList<String> getLogs() {
-    return reliableBroadcast.getLogs();
+    return uniformReliableBroadcast.getLogs();
   }
 }

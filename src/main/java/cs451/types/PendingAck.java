@@ -1,9 +1,11 @@
-package cs451.messages;
+package cs451.types;
 
 import java.time.Duration;
 import java.time.Instant;
 
-public class PendingAckMessage {
+import cs451.messages.Message;
+
+public class PendingAck {
     Message message;
     private Instant start;
     // The address of the node from which we wait an ack
@@ -12,7 +14,7 @@ public class PendingAckMessage {
     private boolean isAcked = false;
     public static final int ACK_TIMEOUT = 500; // in milliseconds
 
-    public PendingAckMessage(Message message, Instant start) {
+    public PendingAck(Message message, Instant start) {
         this.message = message;
         this.start = start;
         this.destIP = message.getDestIP();

@@ -32,7 +32,7 @@ public class Node implements NodeInterface {
         this.newMessages = new ConcurrentLinkedQueue<>();
 
         try {
-            this.fifoBroadcast = new FIFOBroadcast(pid, outputPath, pid, peers);
+            this.fifoBroadcast = new FIFOBroadcast(pid, host.getIp(), host.getPort(), peers);
         } catch (SocketException e) {
             throw new SocketException("Error while creating node: " + e.getMessage());
         }
@@ -81,8 +81,11 @@ public class Node implements NodeInterface {
         System.out.println("Starting node");
         listeningThread.start();
 
-        sendThread.start();
-        waitForAckThread.start();
+        System.out.println("pid: " + pid);
+        if (pid != 1) {
+            sendThread.start();
+            waitForAckThread.start();
+        }
     }
 
     @Override
