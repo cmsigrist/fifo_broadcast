@@ -1,69 +1,62 @@
 package cs451.messages;
 
-import java.net.DatagramPacket;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
+import java.util.StringJoiner;
 
-import static cs451.network.UDPChannel.MAX_SIZE;
-
-public class Message implements MessageInterface {
+public class Message {
     // process that sent the message
     private final byte pid;
     private final int seqNum;
-    private final String destIP;
-    private final int destPort;
     private final String payload;
     private final MessageType type;
-    public static final int typeIndex = 0;
-    public static final int pidIndex = 1;
-    public static final int payloadIndex = 2;
-    public static final int packetSizeOffset = 3;
-    public static final int headerSize = 5;
+    private final String originIP;
+    private final int originPort;
 
-    public Message(byte pid, int seqNum, String destIP, int destPort, String payload, MessageType type) {
+    public static String ACK_PAYLOAD = "";
+
+    // Constructor for Messages of type type
+    public Message(byte pid, int seqNum, String originIP, int originPort, String payload, MessageType type) {
         this.pid = pid;
         this.seqNum = seqNum;
-        this.destIP = destIP;
-        this.destPort = destPort;
+        this.originIP = originIP;
+        this.originPort = originPort;
         this.payload = payload;
         this.type = type;
     }
 
-    public Message(byte pid, int seqNum, String destIP, int destPort, String payload) {
+    // Constructor for ChatMessage
+    public Message(byte pid, int seqNum, String originIP, int originPort, String payload) {
         this.pid = pid;
         this.seqNum = seqNum;
-        this.destIP = destIP;
-        this.destPort = destPort;
+        this.originIP = originIP;
+        this.originPort = originPort;
         this.payload = payload;
         this.type = MessageType.CHAT_MESSAGE;
     }
 
-    public Message(byte pid, int seqNum, String destIP, int destPort) {
+    // Constructor for AckMessage
+    public Message(byte pid, int seqNum, String originIP, int originPort) {
         this.pid = pid;
         this.seqNum = seqNum;
-        this.destIP = destIP;
-        this.destPort = destPort;
-        this.payload = "";
+        this.originIP = originIP;
+        this.originPort = originPort;
+        this.payload = ACK_PAYLOAD;
         this.type = MessageType.ACK_MESSAGE;
     }
 
-    @Override
     public byte getPid() {
         return pid;
     }
 
-    @Override
     public int getSeqNum() {
         return seqNum;
     }
 
-    public String getDestIP() {
-        return destIP;
+    public String getOriginIP() {
+        return originIP;
     }
 
-    public int getDestPort() {
-        return destPort;
+    public int getOriginPort() {
+        return originPort;
     }
 
     public String getPayload() {
@@ -74,62 +67,53 @@ public class Message implements MessageInterface {
         return type;
     }
 
-    // packet[0] : type (1 byte)
-    // packet[1] : pid (1 byte)
-    // packet[2] : start of payload (1 byte)
-    // packet[3-4] : packetSize (2 byte)
-    // packet[5 up to 12] : seqNum (up to 8 bytes)
-    public byte[] serialize() {
-        byte[] s = Integer.toHexString(seqNum).getBytes();
-        byte[] p = payload.getBytes(StandardCharsets.UTF_8);
+    public String marshall() {
+        StringJoiner stringJoiner = new StringJoiner(":");
 
-        short packetSize = (short) (headerSize + s.length + p.length);
-        assert packetSize < MAX_SIZE;
-        byte[] size = ByteBuffer.allocate(packetSizeOffset).putShort(packetSize).array();
+        stringJoiner
+                .add(Integer.toString(type.ordinal()))
+                .add(Byte.toString(pid))
+                .add(Integer.toString(seqNum))
+                .add(originIP)
+                .add(Integer.toString(originPort))
+                .add(payload);
 
-        byte[] packet = new byte[packetSize];
-        packet[typeIndex] = (byte) type.ordinal();
-        packet[pidIndex] = pid;
-        packet[payloadIndex] = (byte) (headerSize + s.length);
-        packet[packetSizeOffset] = size[0];
-        packet[packetSizeOffset + 1] = size[1];
-
-        System.arraycopy(s, 0, packet, headerSize, s.length);
-        System.arraycopy(p, 0, packet, headerSize + s.length, p.length);
-
-        return packet;
+        return stringJoiner.toString();
     }
 
-    public static Message deSerialize(DatagramPacket d) {
-        byte[] packet = d.getData();
+    public static Message unmarshall(String m) {
+        String[] fields = m.split(":");
 
-        int startPayload = packet[payloadIndex];
-        short packetSize = ByteBuffer.wrap(packet, packetSizeOffset, packetSizeOffset).getShort();
+        MessageType messageType = MessageType.values()[Integer.parseInt(fields[0])];
+        byte pid = Byte.valueOf(fields[1]);
+        int seqNum = Integer.parseInt(fields[2]);
+        String originIP = fields[3];
+        int originPort = Integer.parseInt(fields[4]);
+        String payload = Message.ACK_PAYLOAD;
 
-        int seqNum = Integer.parseUnsignedInt(
-                new String(
-                        Arrays.copyOfRange(packet, headerSize, startPayload)),
-                16);
-
-        String payload = new String(Arrays.copyOfRange(packet, startPayload, packetSize));
-
-        MessageType type = MessageType.values()[packet[typeIndex]];
-
-        return new Message(packet[pidIndex], seqNum, d.getAddress().toString(), d.getPort(), payload, type);
-    }
-
-    public boolean equals(Object o) {
-        if (o instanceof Message) {
-            return ((Message) o).getPid() == pid &&
-                    ((Message) o).getSeqNum() == seqNum &&
-                    ((Message) o).getPayload().equals(payload);
+        if (messageType == MessageType.CHAT_MESSAGE) {
+            payload = fields[5];
         }
 
-        return false;
+        return new Message(pid, seqNum, originIP, originPort, payload, messageType);
     }
 
+    @Override
     public String toString() {
-        return "pid: " + pid + " seqNum: " + seqNum + "\n";
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder
+                .append(type)
+                .append(" pid: ")
+                .append(Integer.valueOf(pid + 1).toString())
+                .append(" seqNum: ")
+                .append(seqNum);
+        // .append(" payload: ")
+        // .append(payload)
+        // .append(" originIP: ")
+        // .append(originIP)
+        // .append(" originPort: ")
+        // .append(originPort);
+        return stringBuilder.toString();
     }
 
     public String delivered() {
@@ -139,4 +123,31 @@ public class Message implements MessageInterface {
     public String broadcast() {
         return "b " + seqNum + "\n";
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o instanceof Message) {
+            return ((Message) o).getPid() == pid &&
+                    ((Message) o).getSeqNum() == seqNum &&
+                    ((Message) o).getPayload().equals(payload) &&
+                    ((Message) o).getOriginIP().equals(originIP) &&
+                    ((Message) o).getOriginPort() == originPort;
+        }
+
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + pid;
+        result = prime * result + seqNum;
+        result = prime * result + ((payload == null) ? 0 : payload.hashCode());
+        result = prime * result + ((type == null) ? 0 : type.hashCode());
+        result = prime * result + ((originIP == null) ? 0 : originIP.hashCode());
+        result = prime * result + originPort;
+        return result;
+    }
+
 }

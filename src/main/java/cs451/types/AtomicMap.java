@@ -26,7 +26,20 @@ public class AtomicMap<K, V> {
     return copy;
   }
 
-  public void add(K key, V value) {
+  public HashMap<K, V> copy() {
+    HashMap<K, V> copy;
+    lock.lock();
+
+    try {
+      copy = new HashMap<>(map);
+    } finally {
+      lock.unlock();
+    }
+
+    return copy;
+  }
+
+  public void put(K key, V value) {
     lock.lock();
 
     try {
@@ -36,9 +49,25 @@ public class AtomicMap<K, V> {
     }
   }
 
-  // Non atomic implementation !
+  public void nonAtomicPut(K key, V value) {
+    map.put(key, value);
+  }
+
   // Return V or null if V does not exist in the map
   public V get(K key) {
+    V value;
+    lock.lock();
+
+    try {
+      value = map.get(key);
+    } finally {
+      lock.unlock();
+    }
+
+    return value;
+  }
+
+  public V nonAtomicGet(K key) {
     return map.get(key);
   }
 
@@ -51,5 +80,4 @@ public class AtomicMap<K, V> {
       lock.unlock();
     }
   }
-
 }

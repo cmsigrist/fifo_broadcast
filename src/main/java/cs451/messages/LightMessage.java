@@ -1,25 +1,39 @@
 package cs451.messages;
 
-public class LightMessage {
-    private final String payload;
-    private final String destIP;
-    private final int destPort;
+import java.util.ArrayList;
 
-    public LightMessage(String payload, String destIP, int destPort) {
+public class LightMessage {
+    private final int seqNum;
+    private final String payload;
+    private final String srcIP;
+    private final int srcPort;
+    private final ArrayList<String> past;
+
+    public LightMessage(int seqNum, String payload, String srcIP, int srcPort, ArrayList<String> past) {
+        this.seqNum = seqNum;
         this.payload = payload;
-        this.destIP = destIP;
-        this.destPort = destPort;
+        this.srcIP = srcIP;
+        this.srcPort = srcPort;
+        this.past = past;
+    }
+
+    public int getSeqNum() {
+        return seqNum;
     }
 
     public String getPayload() {
         return payload;
     }
 
-    public String getDestIP() {
-        return destIP;
+    public String getSrcIP() {
+        return srcIP;
     }
 
-    public int getDestPort() {
-        return destPort;
+    public int getSrcPort() {
+        return srcPort;
+    }
+
+    public ArrayList<String> getPast() {
+        return past;
     }
 }

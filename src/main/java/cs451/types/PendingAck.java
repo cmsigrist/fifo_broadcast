@@ -3,26 +3,21 @@ package cs451.types;
 import java.time.Duration;
 import java.time.Instant;
 
-import cs451.messages.Message;
+import cs451.messages.Packet;
 
 public class PendingAck {
-    Message message;
+    Packet packet;
     private Instant start;
-    // The address of the node from which we wait an ack
-    private final String destIP;
-    private final int destPort;
     private boolean isAcked = false;
     public static final int ACK_TIMEOUT = 500; // in milliseconds
 
-    public PendingAck(Message message, Instant start) {
-        this.message = message;
+    public PendingAck(Packet packet, Instant start) {
+        this.packet = packet;
         this.start = start;
-        this.destIP = message.getDestIP();
-        this.destPort = message.getDestPort();
     }
 
-    public Message getMessage() {
-        return message;
+    public Packet getPacket() {
+        return packet;
     }
 
     public void setAcked() {
@@ -41,11 +36,18 @@ public class PendingAck {
         this.start = Instant.now();
     }
 
-    public String getKey() {
-        return message.getSeqNum() + destIP + destPort;
-    }
+    // public String getKey() {
+    // Message message = packet.getMessage();
+    // return message.getPid() + message.getSeqNum() + packet.getDestIP() +
+    // packet.getDestPort();
+    // }
 
-    public static String makeKey(int seqNum, String destIP, int destPort) {
-        return seqNum + destIP + destPort;
+    // public static String makeKey(byte pid, int seqNum, String srcIP, int srcPort)
+    // {
+    // return pid + seqNum + srcIP + srcPort;
+    // }
+
+    public String toString() {
+        return packet.toString();
     }
 }

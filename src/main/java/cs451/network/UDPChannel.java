@@ -7,7 +7,7 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 
-public class UDPChannel {
+public class UDPChannel implements ChannelInterface {
     public static final int MAX_SIZE = 1400;
     private final DatagramSocket socket;
 
@@ -21,6 +21,7 @@ public class UDPChannel {
         }
     }
 
+    @Override
     public void send(DatagramPacket d) throws IOException {
         try {
             this.socket.send(d);
@@ -28,6 +29,7 @@ public class UDPChannel {
         }
     }
 
+    @Override
     public DatagramPacket receive() throws IOException {
         byte[] buf = new byte[MAX_SIZE];
         DatagramPacket d = new DatagramPacket(buf, MAX_SIZE);

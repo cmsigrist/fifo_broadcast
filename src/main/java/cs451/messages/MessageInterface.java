@@ -13,5 +13,5 @@ public interface MessageInterface {
 
     public MessageType getType();
 
-    public byte[] serialize();
+    public byte[] marshall();
 }
