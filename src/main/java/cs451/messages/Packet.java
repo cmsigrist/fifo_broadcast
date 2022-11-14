@@ -7,6 +7,7 @@ import java.util.Arrays;
 import java.util.StringJoiner;
 
 public class Packet {
+  private final MessageType type;
   private final Message message;
   private ArrayList<Message> past;
   private String relayIP;
@@ -16,7 +17,9 @@ public class Packet {
 
   public static int startPacket = 2;
 
-  public Packet(Message message, ArrayList<Message> past, String relayIP, int relayPort, String destIP, int destPort) {
+  public Packet(MessageType type, Message message, ArrayList<Message> past, String relayIP, int relayPort,
+      String destIP, int destPort) {
+    this.type = type;
     this.message = message;
     this.past = new ArrayList<>(past);
     this.relayIP = relayIP;
@@ -25,25 +28,27 @@ public class Packet {
     this.destPort = destPort;
   }
 
-  public Packet(Packet packet, String destIP, int destPort) {
-    this.message = packet.getMessage();
-    this.past = packet.getPast();
-    this.relayIP = packet.getRelayIP();
-    this.relayPort = packet.getRelayPort();
-    this.destIP = destIP;
-    this.destPort = destPort;
-  }
-
   // For CHAT_MESSAGE
   public Packet(Message message, ArrayList<Message> past) {
+    this.type = MessageType.CHAT_MESSAGE;
     this.message = message;
     this.past = new ArrayList<>(past);
   }
 
-  // For ACK_MESSAGE
-  public Packet(Message message) {
-    this.message = message;
-    this.past = new ArrayList<>();
+  // Change the relay, dest, and the type
+  public Packet(MessageType type, Packet packet, String relayIP, int relayPort, String destIP, int destPort) {
+    this.type = type;
+    this.message = packet.getMessage();
+    this.past = packet.getPast();
+    this.relayIP = relayIP;
+    this.relayPort = relayPort;
+    this.destIP = destIP;
+    this.destPort = destPort;
+    this.past = new ArrayList<>(packet.getPast());
+  }
+
+  public MessageType getType() {
+    return type;
   }
 
   public Message getMessage() {
@@ -78,6 +83,14 @@ public class Packet {
     this.relayPort = relayPort;
   }
 
+  public String getKey() {
+    return relayIP + "," + relayPort;
+  }
+
+  public static String getKey(String srcIP, int srcPort) {
+    return srcIP + "," + srcPort;
+  }
+
   public byte[] marshall() {
     StringJoiner stringJoiner = new StringJoiner("|");
 
@@ -88,6 +101,7 @@ public class Packet {
     }
 
     stringJoiner
+        .add(type.toString())
         .add(relayIP)
         .add(Integer.toString(relayPort))
         .add(destIP)
@@ -119,8 +133,10 @@ public class Packet {
     ArrayList<Message> past = new ArrayList<>();
     int length = fields.length;
 
-    if (message.getType() == MessageType.CHAT_MESSAGE) {
-      for (int i = 1; i < length - 4; i++) {
+    MessageType type = MessageType.valueOf(fields[length - 5]);
+
+    if (type == MessageType.CHAT_MESSAGE) {
+      for (int i = 1; i < length - 5; i++) {
         past.add(Message.unmarshall(fields[i]));
       }
     }
@@ -130,7 +146,7 @@ public class Packet {
     String destIP = fields[length - 2];
     int destPort = Integer.parseInt(fields[length - 1]);
 
-    return new Packet(message, past, relayIP, relayPort, destIP, destPort);
+    return new Packet(type, message, past, relayIP, relayPort, destIP, destPort);
   }
 
   @Override
@@ -144,19 +160,21 @@ public class Packet {
 
   @Override
   public int hashCode() {
-    final int prime = 31;
-    int result = 1;
-    result = prime * result + ((message == null) ? 0 : message.hashCode());
-    result = prime * result + ((past == null) ? 0 : past.hashCode());
-    result = prime * result + ((relayIP == null) ? 0 : relayIP.hashCode());
-    result = prime * result + relayPort;
-    result = prime * result + ((destIP == null) ? 0 : destIP.hashCode());
-    result = prime * result + destPort;
-    return result;
+    // final int prime = 31;
+    // int result = 1;
+    // result = prime * result + ((message == null) ? 0 : message.hashCode());
+    // result = prime * result + ((past == null) ? 0 : past.hashCode());
+    // result = prime * result + ((relayIP == null) ? 0 : relayIP.hashCode());
+    // result = prime * result + relayPort;
+    // result = prime * result + ((destIP == null) ? 0 : destIP.hashCode());
+    // result = prime * result + destPort;
+    // return result;
+
+    return message.hashCode();
   }
 
   @Override
   public String toString() {
-    return message.toString();
+    return "{" + type + " : " + message.toString() + " from: " + relayPort + "}";
   }
 }

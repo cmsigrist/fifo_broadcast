@@ -1,6 +1,5 @@
 package cs451.types;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -38,13 +37,7 @@ public class AtomicSet<T> {
     lock.lock();
 
     try {
-      ArrayList<T> obj = new ArrayList<>(set);
-      for (T o : obj) {
-        if (o.equals(e)) {
-          has = true;
-        }
-      }
-      System.out.println("Set contains: " + has);
+      has = set.contains(e);
     } finally {
       lock.unlock();
     }

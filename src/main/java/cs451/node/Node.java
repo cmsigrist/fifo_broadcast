@@ -106,9 +106,9 @@ public class Node implements NodeInterface {
         deliverThread.start();
         IPCThread.start();
 
-        ScheduledExecutorService service;
-        service = Executors.newSingleThreadScheduledExecutor();
-        service.scheduleAtFixedRate(() -> {
+        ScheduledExecutorService ackService;
+        ackService = Executors.newSingleThreadScheduledExecutor();
+        ackService.scheduleAtFixedRate(() -> {
             try {
                 fifoBroadcast.waitForAck();
             } catch (IOException | InterruptedException e) {
@@ -116,14 +116,15 @@ public class Node implements NodeInterface {
             }
         }, 500, 400, TimeUnit.MILLISECONDS);
 
-        // TODO parameterize rate (1 milli -> executes after each send)
-        service.scheduleAtFixedRate(() -> {
-            try {
-                fifoBroadcast.heartbeat();
-            } catch (IOException | InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }, 0, 500, TimeUnit.MILLISECONDS);
+        ScheduledExecutorService heartbeatService;
+        heartbeatService = Executors.newSingleThreadScheduledExecutor();
+        heartbeatService.scheduleAtFixedRate(() -> {
+            // try {
+            fifoBroadcast.heartbeat();
+            // } catch (IOException | InterruptedException e) {
+            // throw new RuntimeException(e);
+            // }
+        }, 0, 200, TimeUnit.MILLISECONDS);
 
         // TODO uncomment to use only 4 threads
         // for (int i = 1; i < numMessage + 1; i++) {

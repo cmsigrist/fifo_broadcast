@@ -1,33 +1,20 @@
 package cs451.types;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class AtomicMap<K, V> {
-  private final HashMap<K, V> map;
-  public final ReentrantLock lock;
+  private final HashMap<K, HashSet<V>> map;
+  private final ReentrantLock lock;
 
   public AtomicMap() {
     this.map = new HashMap<>();
     this.lock = new ReentrantLock();
   }
 
-  public ArrayList<V> snapshot() {
-    ArrayList<V> copy;
-    lock.lock();
-
-    try {
-      copy = new ArrayList<>(map.values());
-    } finally {
-      lock.unlock();
-    }
-
-    return copy;
-  }
-
-  public HashMap<K, V> copy() {
-    HashMap<K, V> copy;
+  public HashMap<K, HashSet<V>> copy() {
+    HashMap<K, HashSet<V>> copy;
     lock.lock();
 
     try {
@@ -39,23 +26,50 @@ public class AtomicMap<K, V> {
     return copy;
   }
 
-  public void put(K key, V value) {
+  public void put(K key, V[] values) {
+    HashSet<V> newValues;
+
     lock.lock();
 
     try {
-      map.put(key, value);
+      newValues = map.get(key);
+
+      if (newValues == null) {
+        newValues = new HashSet<>();
+      }
+
+      for (V value : values) {
+        newValues.add(value);
+      }
+
+      map.put(key, newValues);
     } finally {
       lock.unlock();
     }
   }
 
-  public void nonAtomicPut(K key, V value) {
-    map.put(key, value);
+  public void put(K key, V value) {
+    HashSet<V> newValues;
+
+    lock.lock();
+
+    try {
+      newValues = map.get(key);
+
+      if (newValues == null) {
+        newValues = new HashSet<>();
+      }
+
+      newValues.add(value);
+      map.put(key, newValues);
+    } finally {
+      lock.unlock();
+    }
   }
 
   // Return V or null if V does not exist in the map
-  public V get(K key) {
-    V value;
+  public HashSet<V> get(K key) {
+    HashSet<V> value;
     lock.lock();
 
     try {
@@ -67,10 +81,6 @@ public class AtomicMap<K, V> {
     return value;
   }
 
-  public V nonAtomicGet(K key) {
-    return map.get(key);
-  }
-
   public void remove(K key) {
     lock.lock();
 
@@ -79,5 +89,55 @@ public class AtomicMap<K, V> {
     } finally {
       lock.unlock();
     }
+  }
+
+  public boolean hasKey(K key) {
+    boolean hasKey = false;
+    lock.lock();
+
+    try {
+      hasKey = map.containsKey(key);
+    } finally {
+      lock.unlock();
+    }
+
+    return hasKey;
+  }
+
+  // Non atomic function to be used in combination when
+  // process has already acquired the lock
+
+  public void acquireLock() {
+    lock.lock();
+  }
+
+  public void releaseLock() {
+    lock.unlock();
+  }
+
+  public HashSet<V> nonAtomicGet(K key) {
+    return map.get(key);
+  }
+
+  public void nonAtomicRemove(K key) {
+    map.remove(key);
+  }
+
+  public void nonAtomicPut(K key, V value) {
+    HashSet<V> newValues;
+
+    newValues = map.get(key);
+
+    if (newValues == null) {
+      newValues = new HashSet<>();
+    }
+
+    newValues.add(value);
+    map.put(key, newValues);
+
+  }
+
+  public boolean nonAtomicHasKey(K key) {
+    return map.containsKey(key);
   }
 }
