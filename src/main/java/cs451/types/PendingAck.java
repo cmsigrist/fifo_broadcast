@@ -6,10 +6,11 @@ import java.time.Instant;
 public class PendingAck {
     private final String destIP;
     private final int destPort;
-    private final Instant start;
-    private final int timeout;
-    private final int attemptNumber;
+    private Instant start;
+    private int timeout;
+    private int attemptNumber;
     public static final int ACK_TIMEOUT = 500; // in milliseconds
+    public static final int BACK_OFF = 100; // in milliseconds
 
     public PendingAck(String destIP, int destPort) {
         this.destIP = destIP;
@@ -17,14 +18,6 @@ public class PendingAck {
         this.start = Instant.now();
         this.timeout = ACK_TIMEOUT;
         this.attemptNumber = 1;
-    }
-
-    public PendingAck(PendingAck pendingAck) {
-        this.destIP = pendingAck.getDestIP();
-        this.destPort = pendingAck.getDestPort();
-        this.start = Instant.now();
-        this.attemptNumber = pendingAck.getAttemptNumber() + 1;
-        this.timeout = pendingAck.getTimeout() * attemptNumber;
     }
 
     public String getDestIP() {
@@ -35,16 +28,22 @@ public class PendingAck {
         return destPort;
     }
 
-    public int getTimeout() {
-        return timeout;
-    }
-
-    public int getAttemptNumber() {
-        return attemptNumber;
-    }
-
     public boolean hasTimedOut() {
         return Duration.between(start, Instant.now()).toMillis() >= timeout;
+    }
+
+    public void resetTimeout() {
+        this.attemptNumber += 1;
+        this.timeout += (BACK_OFF * attemptNumber);
+        this.start = Instant.now();
+    }
+
+    public String getKey() {
+        return destIP + ":" + destPort;
+    }
+
+    public static String getKey(String destIP, int destPort) {
+        return destIP + ":" + destPort;
     }
 
     @Override

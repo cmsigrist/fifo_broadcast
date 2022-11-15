@@ -2,6 +2,7 @@ package cs451.broadcast;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -14,6 +15,7 @@ import cs451.node.Host;
 import cs451.types.AtomicArrayList;
 import cs451.types.AtomicMap;
 import cs451.types.AtomicSet;
+import cs451.types.PendingAck;
 
 public class FIFOBroadcast {
   private final byte pid;
@@ -22,11 +24,13 @@ public class FIFOBroadcast {
   private final ArrayList<Host> peers;
   private final PerfectLink p2pLink;
 
-  private final AtomicMap<Message, String> ackedMessage;
+  private final AtomicMap<Message, String, String> ackedMessage;
+  private final AtomicMap<Packet, String, PendingAck> pendingAcks;
   private final AtomicSet<Packet> forwarded;
   private final HashSet<Integer> delivered;
   private final AtomicArrayList<Message> past;
 
+  // private final Queue<Packet> buffer;
   private final Queue<Packet> deliverQueue;
 
   private int seqNum = 0;
@@ -42,13 +46,15 @@ public class FIFOBroadcast {
     this.peers = peers;
 
     ackedMessage = new AtomicMap<>();
+    this.pendingAcks = new AtomicMap<>();
     forwarded = new AtomicSet<>();
     delivered = new HashSet<>();
     past = new AtomicArrayList<>();
 
     deliverQueue = new ConcurrentLinkedQueue<>();
+    // buffer = new ConcurrentLinkedQueue<>();
 
-    this.p2pLink = new PerfectLink(pid, srcIP, srcPort, deliverQueue);
+    this.p2pLink = new PerfectLink(pid, srcIP, srcPort, pendingAcks, deliverQueue);
     logs = new AtomicArrayList<>();
 
     this.majority = 1 + (peers.size() / 2);
@@ -83,10 +89,10 @@ public class FIFOBroadcast {
 
   public void bebBroadcast(Packet packet) throws IOException {
     for (Host peer : peers) {
-      Packet p = new Packet(packet.getType(), packet, srcIP, srcPort, peer.getIp(), peer.getPort());
+      packet.setRelayPacket(MessageType.CHAT_MESSAGE, srcIP, srcPort, peer.getIp(), peer.getPort());
       System.out.println("Beb broadcast packet: " +
-          p.toString() + " to : " + peer.getPort());
-      p2pLink.send(p);
+          packet.toString() + " to : " + peer.getPort());
+      p2pLink.send(packet);
     }
   }
 
@@ -129,14 +135,22 @@ public class FIFOBroadcast {
       for (Message m : packetPast) {
         if (!delivered.contains(m.hashCode())) {
           deliver(m);
-          // TODO only add you message to your local past ?
-          // past.add(m);
         }
       }
 
       deliver(message);
-      // TODO add a past per pid ?
-      // past.add(message);
+
+      // Broadcast ack
+      // Packet ackPacket = new Packet(MessageType.ACK_MESSAGE, packet, srcIP,
+      // srcPort, packet.getRelayIP(),
+      // packet.getRelayPort());
+      // try {
+      // System.out.println("Urb deliver broadcasting ack");
+
+      // urbBroadcast(ackPacket);
+      // } catch (IOException e) {
+      // System.out.println("Urb deliver Error while broadcasting ack");
+      // }
     }
 
     // Clean up the structure if everyone delivered the packet
@@ -172,17 +186,20 @@ public class FIFOBroadcast {
   public void bebDeliver(Packet packet) throws IOException {
     Message message = packet.getMessage();
     String packetKey = packet.getKey();
-    MessageType type = packet.getType();
-    Packet ackPacket = new Packet(MessageType.ACK_MESSAGE, packet, srcIP, srcPort, packet.getRelayIP(),
-        packet.getRelayPort());
+    // MessageType type = packet.getType();
+
+    // Packet ackPacket = new Packet(MessageType.ACK_MESSAGE, packet, srcIP,
+    // srcPort, packet.getRelayIP(),
+    // packet.getRelayPort());
 
     // Send ack if first time received an ack for the packet from the source
-    if (type == MessageType.ACK_MESSAGE) {
-      HashSet<String> acks = ackedMessage.get(message);
+    if (packet.getType() == MessageType.ACK_MESSAGE) {
+      HashMap<String, String> acks = ackedMessage.get(message);
 
-      if (acks != null && !acks.contains(packetKey)) {
-        System.out.println("beb deliver P2P sending ACK: " + ackPacket.toString() + " to: " + ackPacket.getDestPort());
-        p2pLink.P2PSend(ackPacket);
+      if (acks != null && !acks.containsKey(packetKey)) {
+        packet.setRelayPacket(MessageType.ACK_MESSAGE, srcIP, srcPort, packet.getRelayIP(), packet.getRelayPort());
+        System.out.println("beb deliver P2P sending ACK: " + packet.toString() + " to: " + packet.getDestPort());
+        p2pLink.P2PSend(packet);
       }
     }
 
@@ -199,15 +216,16 @@ public class FIFOBroadcast {
         .println("bebDeliver ackedMessage for: " + packet.toString() + " acks update: " + ackedMessage.get(message));
 
     // Only forward if it's a chat message, answer with an ack
-    if (type == MessageType.CHAT_MESSAGE) {
-      if (!forwarded.contains(packet)) {
-        // set yourself as the relay and forward (broadcast) once the message
-        forwarded.add(packet);
-        System.out.println("bebDeliver forwarded: " + forwarded.snapshot());
+    // if (type == MessageType.CHAT_MESSAGE) {
+    if (!forwarded.contains(packet)) {
+      // set yourself as the relay and forward (broadcast) once the message
+      forwarded.add(packet);
+      System.out.println("bebDeliver forwarded: " + forwarded.snapshot());
+      packet.setRelayPacket(MessageType.ACK_MESSAGE, srcIP, srcPort, packet.getRelayIP(), packet.getRelayPort());
 
-        bebBroadcast(ackPacket);
-      }
+      bebBroadcast(packet);
     }
+    // }
   }
 
   public void waitForAck() throws IOException, InterruptedException {

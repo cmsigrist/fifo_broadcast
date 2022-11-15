@@ -7,9 +7,6 @@ import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 import cs451.broadcast.FIFOBroadcast;
 import cs451.messages.Packet;
@@ -25,6 +22,8 @@ public class Node implements NodeInterface {
     Thread deliverThread;
     Thread sendThread;
     Thread IPCThread;
+    Thread heartbeatThread;
+    Thread waitForAckThread;
 
     // Can be extended using a list of hosts, instead of a single receiver (destIP,
     // destPort)
@@ -87,6 +86,29 @@ public class Node implements NodeInterface {
             }
         });
 
+        heartbeatThread = new Thread(() -> {
+            while (true) {
+                fifoBroadcast.heartbeat();
+
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                }
+            }
+        });
+
+        waitForAckThread = new Thread(() -> {
+            while (true) {
+                try {
+                    fifoBroadcast.waitForAck();
+
+                    Thread.sleep(500);
+                } catch (IOException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+
         initSignalHandlers();
     }
 
@@ -95,59 +117,39 @@ public class Node implements NodeInterface {
     // Interrupt
     // Send
     // Deliver
-    // Heartbeat & Ack
-    // Subscriber & Publisher
+    // Heartbeat
+    // Ack
+    // IPC
 
     @Override
     public void start() {
         System.out.println("Starting node");
-
+        // Interrupt thread
         sendThread.start();
         deliverThread.start();
         IPCThread.start();
+        heartbeatThread.start();
+        waitForAckThread.start();
 
-        ScheduledExecutorService ackService;
-        ackService = Executors.newSingleThreadScheduledExecutor();
-        ackService.scheduleAtFixedRate(() -> {
-            try {
-                fifoBroadcast.waitForAck();
-            } catch (IOException | InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }, 500, 400, TimeUnit.MILLISECONDS);
-
-        ScheduledExecutorService heartbeatService;
-        heartbeatService = Executors.newSingleThreadScheduledExecutor();
-        heartbeatService.scheduleAtFixedRate(() -> {
-            // try {
-            fifoBroadcast.heartbeat();
-            // } catch (IOException | InterruptedException e) {
-            // throw new RuntimeException(e);
-            // }
-        }, 0, 200, TimeUnit.MILLISECONDS);
-
-        // TODO uncomment to use only 4 threads
-        // for (int i = 1; i < numMessage + 1; i++) {
-        // newMessages.offer(String.valueOf(i));
-        // }
-
-        // System.out.println("Broadcasting and delivering messages...\n");
-        // Send on main thread
-        // while (true) {
-        // // pop last message
-        // String newMessage = newMessages.poll();
-
-        // // send last message
-        // if (newMessage != null) {
+        // ScheduledExecutorService ackService;
+        // ackService = Executors.newSingleThreadScheduledExecutor();
+        // ackService.scheduleAtFixedRate(() -> {
         // try {
-        // fifoBroadcast.broadcast(newMessage);
-        // } catch (IOException e) {
+        // fifoBroadcast.waitForAck();
+        // } catch (IOException | InterruptedException e) {
         // throw new RuntimeException(e);
         // }
-        // }
-        // }
+        // }, 500, 400, TimeUnit.MILLISECONDS);
 
-        // Interrupt thread
+        // ScheduledExecutorService heartbeatService;
+        // heartbeatService = Executors.newSingleThreadScheduledExecutor();
+        // heartbeatService.scheduleAtFixedRate(() -> {
+        // // try {
+        // fifoBroadcast.heartbeat();
+        // // } catch (IOException | InterruptedException e) {
+        // // throw new RuntimeException(e);
+        // // }
+        // }, 0, 200, TimeUnit.MILLISECONDS);
     }
 
     @Override

@@ -7,9 +7,9 @@ import java.util.Arrays;
 import java.util.StringJoiner;
 
 public class Packet {
-  private final MessageType type;
+  private MessageType type;
   private final Message message;
-  private ArrayList<Message> past;
+  private final ArrayList<Message> past;
   private String relayIP;
   private int relayPort;
   private String destIP;
@@ -39,7 +39,6 @@ public class Packet {
   public Packet(MessageType type, Packet packet, String relayIP, int relayPort, String destIP, int destPort) {
     this.type = type;
     this.message = packet.getMessage();
-    this.past = packet.getPast();
     this.relayIP = relayIP;
     this.relayPort = relayPort;
     this.destIP = destIP;
@@ -75,6 +74,10 @@ public class Packet {
     return destPort;
   }
 
+  public void setType(MessageType type) {
+    this.type = type;
+  }
+
   public void setRelayIP(String relayIP) {
     this.relayIP = relayIP;
   }
@@ -83,12 +86,28 @@ public class Packet {
     this.relayPort = relayPort;
   }
 
+  public void setDestIP(String destIP) {
+    this.destIP = destIP;
+  }
+
+  public void setDestPort(int destPort) {
+    this.destPort = destPort;
+  }
+
   public String getKey() {
     return relayIP + "," + relayPort;
   }
 
   public static String getKey(String srcIP, int srcPort) {
     return srcIP + "," + srcPort;
+  }
+
+  public void setRelayPacket(MessageType type, String relayIP, int relayPort, String destIP, int destPort) {
+    this.type = type;
+    this.relayIP = relayIP;
+    this.relayPort = relayPort;
+    this.destIP = destIP;
+    this.destPort = destPort;
   }
 
   public byte[] marshall() {

@@ -6,7 +6,6 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Queue;
 
 import cs451.messages.Packet;
@@ -26,11 +25,12 @@ public class PerfectLink {
     // With Chat Message and received packet with ACK_Message have same hash!
     // Or change such that process simply send back the same packet (modulo dest)
     // to src for ack
-    private final AtomicMap<Packet, PendingAck> pendingAcks;
+    private final AtomicMap<Packet, String, PendingAck> pendingAcks;
     // List containing the keys of messages that were acked
     private final Queue<Packet> bebDeliverQueue;
 
-    public PerfectLink(byte pid, String srcIp, int srcPort, Queue<Packet> bebDeliverQueue) throws SocketException {
+    public PerfectLink(byte pid, String srcIp, int srcPort, AtomicMap<Packet, String, PendingAck> pendingAcks,
+            Queue<Packet> bebDeliverQueue) throws SocketException {
         try {
             this.UDPChannel = new UDPChannel(srcIp, srcPort);
         } catch (SocketException e) {
@@ -40,7 +40,7 @@ public class PerfectLink {
         // this.pid = pid;
         this.srcIP = srcIp;
         this.srcPort = srcPort;
-        this.pendingAcks = new AtomicMap<>();
+        this.pendingAcks = pendingAcks;
         this.bebDeliverQueue = bebDeliverQueue;
     }
 
@@ -51,7 +51,7 @@ public class PerfectLink {
                     packet.getDestPort());
 
             PendingAck pendingAck = new PendingAck(packet.getDestIP(), packet.getDestPort());
-            pendingAcks.put(packet, pendingAck);
+            pendingAcks.put(packet, pendingAck.getKey(), pendingAck);
 
             P2PSend(packet);
         } catch (IOException e) {
@@ -61,7 +61,7 @@ public class PerfectLink {
 
     // Sends all the message
     public void waitForAck() throws IOException, InterruptedException {
-        HashMap<Packet, HashSet<PendingAck>> pendingAcksCopy = pendingAcks.copy();
+        HashMap<Packet, HashMap<String, PendingAck>> pendingAcksCopy = pendingAcks.copy();
         // Snapshot
 
         System.out.println("WaitForAck pendingAcks: " + pendingAcksCopy);
@@ -69,32 +69,39 @@ public class PerfectLink {
         ArrayList<Packet> packets = new ArrayList<>(pendingAcksCopy.keySet());
 
         for (Packet packet : packets) {
-            ArrayList<PendingAck> pending = new ArrayList<>(pendingAcksCopy.get(packet));
+            ArrayList<PendingAck> pending = new ArrayList<>(pendingAcksCopy.get(packet).values());
+
+            packet.setRelayIP(srcIP);
+            packet.setRelayPort(srcPort);
 
             for (PendingAck p : pending) {
-                // System.out.println("WaitForAck pending p: " + p + " TO ? " +
-                // p.hasTimedOut());
                 if (p.hasTimedOut()) {
                     pendingAcks.acquireLock();
 
                     try {
                         // Check if it hasn't been acked in the meantime
-                        boolean stillPending = pendingAcks.nonAtomicGet(packet).contains(p);
+                        boolean stillPending = pendingAcks.nonAtomicGet(packet).containsKey(p.getKey());
 
                         if (stillPending) {
                             try {
-                                Packet newPacket = new Packet(packet.getType(), packet, srcIP, srcPort, p.getDestIP(),
-                                        p.getDestPort());
+                                // Avoid creating a new packet
+                                // Packet newPacket = new Packet(packet.getType(), packet, srcIP, srcPort,
+                                // p.getDestIP(),
+                                // p.getDestPort());
+
+                                packet.setDestIP(p.getDestIP());
+                                packet.setDestPort(p.getDestPort());
+
                                 System.out.println(
-                                        "WaitForAck resending: " + newPacket.toString() + " to: " +
-                                                newPacket.getDestPort());
-                                P2PSend(newPacket);
+                                        "WaitForAck resending: " + packet.toString() + " to: " +
+                                                packet.getDestPort());
+
+                                P2PSend(packet);
                             } catch (IOException e) {
                                 System.out.println("Error while sending message: " + e.getMessage());
                             }
 
-                            pendingAcks.nonAtomicGet(packet).remove(p);
-                            pendingAcks.nonAtomicPut(packet, new PendingAck(p));
+                            pendingAcks.get(packet).get(p.getKey()).resetTimeout();
                         }
                         // System.out.println("Sent packet: " + seqNum);
                     } finally {
@@ -106,6 +113,7 @@ public class PerfectLink {
     }
 
     public void P2PSend(Packet packet) throws IOException {
+        System.out.println("P2P sending packet: " + packet + " to: " + packet.getDestPort());
         byte[] p = packet.marshall();
         DatagramPacket d = new DatagramPacket(p, p.length, InetAddress.getByName(packet.getDestIP()),
                 packet.getDestPort());
@@ -151,7 +159,7 @@ public class PerfectLink {
                 // packet.toString());
 
                 pendingAcks.nonAtomicGet(packet)
-                        .remove(new PendingAck(packet.getRelayIP(), packet.getRelayPort()));
+                        .remove(PendingAck.getKey(packet.getRelayIP(), packet.getRelayPort()));
 
                 // System.out.println("P2P deliver updated pending acks: " +
                 // pendingAcks.nonAtomicGet(packet));

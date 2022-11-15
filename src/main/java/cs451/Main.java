@@ -12,12 +12,9 @@ import cs451.node.Node;
 import cs451.parser.Parser;
 
 public class Main {
-    private static final int MAX_THREADS = 170; // Each node uses 6 threads: floor(1024 / 6) = 170 nodes
-
     // private static void handleSignal() {
     // // immediately stop network packet processing
     // System.out.println("Immediately stopping network packet processing.");
-
     // // write/flush output file if necessary
     // System.out.println("Writing output.");
     // }
@@ -35,11 +32,8 @@ public class Main {
         Parser parser = new Parser(args);
         parser.parse();
 
+        // TODO what happens if node is stopped before it is created ?
         // initSignalHandlers();
-
-        // Give 6 threads per node (1 to send, 1 to listen, 1 for sig handler, 1 for
-        // acks, 1 for the main, 1 for heartbeat)
-        assert parser.hosts().size() <= MAX_THREADS;
 
         System.out.println("Doing some initialization\n");
 
