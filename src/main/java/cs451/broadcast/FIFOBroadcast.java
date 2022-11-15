@@ -110,16 +110,6 @@ public class FIFOBroadcast {
     delivered.add(message.hashCode());
     logs.addIfNotInArray(message.delivered());
 
-    // TODO does it need to broadcast an ack ?
-    // if (!ackedMessage.get(message).contains(Packet.getKey(srcIP, srcPort))) {
-    // System.out.println("Fifo deliver broadcasting ack");
-    // // updateAck(message, srcIP, srcPort);
-
-    // Packet ackPacket = new Packet(message, srcIP, srcPort, message.getOriginIP(),
-    // message.getOriginPort());
-    // urbBroadcast(ackPacket);
-    // }
-
     // System.out.println("FIFO deliver finished");
   }
 
@@ -141,13 +131,11 @@ public class FIFOBroadcast {
       deliver(message);
 
       // Broadcast ack
-      // Packet ackPacket = new Packet(MessageType.ACK_MESSAGE, packet, srcIP,
-      // srcPort, packet.getRelayIP(),
-      // packet.getRelayPort());
+      // packet.setRelayPacket(MessageType.ACK_MESSAGE, srcIP, srcPort,
+      // packet.getRelayIP(), packet.getRelayPort());
       // try {
       // System.out.println("Urb deliver broadcasting ack");
-
-      // urbBroadcast(ackPacket);
+      // urbBroadcast(packet);
       // } catch (IOException e) {
       // System.out.println("Urb deliver Error while broadcasting ack");
       // }
@@ -186,11 +174,6 @@ public class FIFOBroadcast {
   public void bebDeliver(Packet packet) throws IOException {
     Message message = packet.getMessage();
     String packetKey = packet.getKey();
-    // MessageType type = packet.getType();
-
-    // Packet ackPacket = new Packet(MessageType.ACK_MESSAGE, packet, srcIP,
-    // srcPort, packet.getRelayIP(),
-    // packet.getRelayPort());
 
     // Send ack if first time received an ack for the packet from the source
     if (packet.getType() == MessageType.ACK_MESSAGE) {
@@ -215,8 +198,7 @@ public class FIFOBroadcast {
     System.out
         .println("bebDeliver ackedMessage for: " + packet.toString() + " acks update: " + ackedMessage.get(message));
 
-    // Only forward if it's a chat message, answer with an ack
-    // if (type == MessageType.CHAT_MESSAGE) {
+    // Forward message with ACK
     if (!forwarded.contains(packet)) {
       // set yourself as the relay and forward (broadcast) once the message
       forwarded.add(packet);
@@ -225,7 +207,6 @@ public class FIFOBroadcast {
 
       bebBroadcast(packet);
     }
-    // }
   }
 
   public void waitForAck() throws IOException, InterruptedException {

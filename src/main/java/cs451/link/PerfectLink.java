@@ -21,10 +21,6 @@ public class PerfectLink {
     // UDP channel associated to the link
     private final UDPChannel UDPChannel;
     // TODO optimise such that message are resent in seqNum order
-    // TODO map not working, change hashCode of packets st sent packet
-    // With Chat Message and received packet with ACK_Message have same hash!
-    // Or change such that process simply send back the same packet (modulo dest)
-    // to src for ack
     private final AtomicMap<Packet, String, PendingAck> pendingAcks;
     // List containing the keys of messages that were acked
     private final Queue<Packet> bebDeliverQueue;
@@ -84,11 +80,6 @@ public class PerfectLink {
 
                         if (stillPending) {
                             try {
-                                // Avoid creating a new packet
-                                // Packet newPacket = new Packet(packet.getType(), packet, srcIP, srcPort,
-                                // p.getDestIP(),
-                                // p.getDestPort());
-
                                 packet.setDestIP(p.getDestIP());
                                 packet.setDestPort(p.getDestPort());
 
@@ -103,7 +94,6 @@ public class PerfectLink {
 
                             pendingAcks.get(packet).get(p.getKey()).resetTimeout();
                         }
-                        // System.out.println("Sent packet: " + seqNum);
                     } finally {
                         pendingAcks.releaseLock();
                     }
@@ -148,8 +138,6 @@ public class PerfectLink {
     }
 
     private void deliver(Packet packet) throws IOException {
-        // logs.addIfNotInArray(message.delivered());
-        // Message message = packet.getMessage();
         System.out.println("P2P deliver: " + packet.toString());
         pendingAcks.acquireLock();
 
@@ -160,33 +148,11 @@ public class PerfectLink {
 
                 pendingAcks.nonAtomicGet(packet)
                         .remove(PendingAck.getKey(packet.getRelayIP(), packet.getRelayPort()));
-
-                // System.out.println("P2P deliver updated pending acks: " +
-                // pendingAcks.nonAtomicGet(packet));
             }
         } finally {
             pendingAcks.releaseLock();
         }
 
         bebDeliverQueue.offer(packet);
-
-        // if (pendingAcks.get(packet)) {
-        // // Received ack for message, no need to try to send it anymore
-        // System.out.println("P2P received ack packet: " +
-        // packet.getMessage().toString() + " from: " + packet.getRelayPort());
-        // System.out.println("pending acks: " + pendingAcks.snapshot());
-        // pendingAcks.remove(packet.hashCode());
-        // } else {
-        // Packet ackPacket = new Packet(message, srcIP, srcPort, packet.getRelayIP(),
-        // packet.getRelayPort());
-        // System.out.println("P2P sending ack packet: " +
-        // packet.getMessage().toString() + " to: " + packet.getRelayPort());
-        // try {
-        // P2PSend(ackPacket);
-        // } catch (IOException e) {
-        // throw new IOException(e.getMessage());
-        // }
-        // }
-
     }
 }
