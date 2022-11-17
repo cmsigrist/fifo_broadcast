@@ -168,6 +168,7 @@ public class Packet {
     return new Packet(type, message, past, relayIP, relayPort, destIP, destPort);
   }
 
+  // Packets are wrapper for message
   @Override
   public boolean equals(Object o) {
     if (o instanceof Packet) {
@@ -177,18 +178,9 @@ public class Packet {
     return false;
   }
 
+  // Packets are wrapper for message
   @Override
   public int hashCode() {
-    // final int prime = 31;
-    // int result = 1;
-    // result = prime * result + ((message == null) ? 0 : message.hashCode());
-    // result = prime * result + ((past == null) ? 0 : past.hashCode());
-    // result = prime * result + ((relayIP == null) ? 0 : relayIP.hashCode());
-    // result = prime * result + relayPort;
-    // result = prime * result + ((destIP == null) ? 0 : destIP.hashCode());
-    // result = prime * result + destPort;
-    // return result;
-
     return message.hashCode();
   }
 

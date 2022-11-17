@@ -30,13 +30,14 @@ public class FIFOBroadcast {
   private final HashSet<Integer> delivered;
   private final AtomicArrayList<Message> past;
 
-  // private final Queue<Packet> buffer;
+  private final Queue<Packet> buffer;
   private final Queue<Packet> deliverQueue;
 
   private int seqNum = 0;
   private final AtomicArrayList<String> logs;
 
   private final int majority;
+  private final int BUFFER_THRESHOLD;
 
   public FIFOBroadcast(byte pid, String srcIP, int srcPort, ArrayList<Host> peers)
       throws IOException {
@@ -52,12 +53,14 @@ public class FIFOBroadcast {
     past = new AtomicArrayList<>();
 
     deliverQueue = new ConcurrentLinkedQueue<>();
-    // buffer = new ConcurrentLinkedQueue<>();
+    buffer = new ConcurrentLinkedQueue<>();
 
     this.p2pLink = new PerfectLink(pid, srcIP, srcPort, pendingAcks, deliverQueue);
     logs = new AtomicArrayList<>();
 
     this.majority = 1 + (peers.size() / 2);
+    // TODO tweak threshold to respect memory limitations
+    this.BUFFER_THRESHOLD = peers.size() * 10;
   }
 
   public void broadcast(String payload) throws IOException {
@@ -75,10 +78,6 @@ public class FIFOBroadcast {
 
     String[] ackValues = { Packet.getKey(srcIP, srcPort) };
     ackedMessage.put(message, ackValues);
-
-    // HashSet<String> values = new HashSet<>();
-    // values.add(Keys.ackValues(srcIP, srcPort));
-    // ackedMessage.put(message, values);
   }
 
   public void urbBroadcast(Packet packet) throws IOException {
@@ -129,21 +128,13 @@ public class FIFOBroadcast {
       }
 
       deliver(message);
-
-      // Broadcast ack
-      // packet.setRelayPacket(MessageType.ACK_MESSAGE, srcIP, srcPort,
-      // packet.getRelayIP(), packet.getRelayPort());
-      // try {
-      // System.out.println("Urb deliver broadcasting ack");
-      // urbBroadcast(packet);
-      // } catch (IOException e) {
-      // System.out.println("Urb deliver Error while broadcasting ack");
-      // }
     }
 
     // Clean up the structure if everyone delivered the packet
     // TODO maybe change to majority have acked
-    if (ackedMessage.get(message).size() == peers.size()) {
+    int numAcks = ackedMessage.get(message).size();
+
+    if (numAcks == peers.size()) {
       System.out.println("Urb deliver cleaning up: " + packet.toString());
       forwarded.remove(packet);
       ackedMessage.remove(message);

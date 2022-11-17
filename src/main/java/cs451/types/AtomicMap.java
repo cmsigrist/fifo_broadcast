@@ -105,6 +105,21 @@ public class AtomicMap<K, V, T> {
     return hasKey;
   }
 
+  // Give the total number of un acked message in flight (time num peers)
+  // for the total number of entries
+  public int size() {
+    int size = 0;
+    lock.lock();
+
+    try {
+      size += map.size();
+    } finally {
+      lock.unlock();
+    }
+
+    return size;
+  }
+
   // Non atomic function to be used in combination when
   // process has already acquired the lock
 

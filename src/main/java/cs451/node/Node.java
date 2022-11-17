@@ -32,7 +32,6 @@ public class Node implements NodeInterface {
         this.pid = Integer.valueOf(host.getId() - 1).byteValue();
         this.newMessages = new ConcurrentLinkedQueue<>();
         this.outputPath = outputPath;
-        // this.numMessage = numMessage;
 
         String srcIP = host.getIp();
         int srcPort = host.getPort();
@@ -55,7 +54,6 @@ public class Node implements NodeInterface {
             }
         });
 
-        // TODO comment to use only 4 threads
         sendThread = new Thread(() -> {
             while (true) {
                 // pop last message
@@ -112,7 +110,7 @@ public class Node implements NodeInterface {
         initSignalHandlers();
     }
 
-    // Num threads: 6 (-> can be reduced to 5 if combining Main & Send)
+    // Num threads: 7
     // Main
     // Interrupt
     // Send
@@ -124,32 +122,13 @@ public class Node implements NodeInterface {
     @Override
     public void start() {
         System.out.println("Starting node");
+        // Main thread (application thread)
         // Interrupt thread
         sendThread.start();
         deliverThread.start();
         IPCThread.start();
         heartbeatThread.start();
         waitForAckThread.start();
-
-        // ScheduledExecutorService ackService;
-        // ackService = Executors.newSingleThreadScheduledExecutor();
-        // ackService.scheduleAtFixedRate(() -> {
-        // try {
-        // fifoBroadcast.waitForAck();
-        // } catch (IOException | InterruptedException e) {
-        // throw new RuntimeException(e);
-        // }
-        // }, 500, 400, TimeUnit.MILLISECONDS);
-
-        // ScheduledExecutorService heartbeatService;
-        // heartbeatService = Executors.newSingleThreadScheduledExecutor();
-        // heartbeatService.scheduleAtFixedRate(() -> {
-        // // try {
-        // fifoBroadcast.heartbeat();
-        // // } catch (IOException | InterruptedException e) {
-        // // throw new RuntimeException(e);
-        // // }
-        // }, 0, 200, TimeUnit.MILLISECONDS);
     }
 
     @Override
