@@ -30,14 +30,12 @@ public class FIFOBroadcast {
   private final HashSet<Integer> delivered;
   private final AtomicArrayList<Message> past;
 
-  private final Queue<Packet> buffer;
   private final Queue<Packet> deliverQueue;
 
   private int seqNum = 0;
   private final AtomicArrayList<String> logs;
 
   private final int majority;
-  private final int BUFFER_THRESHOLD;
 
   public FIFOBroadcast(byte pid, String srcIP, int srcPort, ArrayList<Host> peers)
       throws IOException {
@@ -53,18 +51,13 @@ public class FIFOBroadcast {
     past = new AtomicArrayList<>();
 
     deliverQueue = new ConcurrentLinkedQueue<>();
-    buffer = new ConcurrentLinkedQueue<>();
-
     this.p2pLink = new PerfectLink(pid, srcIP, srcPort, pendingAcks, deliverQueue);
     logs = new AtomicArrayList<>();
 
     this.majority = 1 + (peers.size() / 2);
-    // TODO tweak threshold to respect memory limitations
-    this.BUFFER_THRESHOLD = peers.size() * 10;
   }
 
   public void broadcast(String payload) throws IOException {
-    // TODO buffer payloads
     seqNum += 1;
     Message message = new Message(pid, seqNum, payload, srcIP, srcPort);
     Packet packet = new Packet(message, past.snapshot());
@@ -131,7 +124,6 @@ public class FIFOBroadcast {
     }
 
     // Clean up the structure if everyone delivered the packet
-    // TODO maybe change to majority have acked
     int numAcks = ackedMessage.get(message).size();
 
     if (numAcks == peers.size()) {
