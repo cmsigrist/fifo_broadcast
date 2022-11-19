@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.time.Instant;
 
 public class PendingAck {
-    private final String destIP;
     private final int destPort;
     private Instant start;
     private int timeout;
@@ -12,20 +11,19 @@ public class PendingAck {
     public static final int ACK_TIMEOUT = 500; // in milliseconds
     public static final int BACK_OFF = 100; // in milliseconds
 
-    public PendingAck(String destIP, int destPort) {
-        this.destIP = destIP;
+    public PendingAck(int destPort) {
         this.destPort = destPort;
         this.start = Instant.now();
         this.timeout = ACK_TIMEOUT;
         this.attemptNumber = 1;
     }
 
-    public String getDestIP() {
-        return destIP;
-    }
-
     public int getDestPort() {
         return destPort;
+    }
+
+    public int getTimeOut() {
+        return timeout;
     }
 
     public boolean hasTimedOut() {
@@ -38,19 +36,10 @@ public class PendingAck {
         this.start = Instant.now();
     }
 
-    public String getKey() {
-        return destIP + ":" + destPort;
-    }
-
-    public static String getKey(String destIP, int destPort) {
-        return destIP + ":" + destPort;
-    }
-
     @Override
     public int hashCode() {
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((destIP == null) ? 0 : destIP.hashCode());
         result = prime * result + destPort;
         return result;
     }
@@ -58,8 +47,7 @@ public class PendingAck {
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof PendingAck) {
-            return ((PendingAck) obj).getDestIP().equals(destIP) &&
-                    ((PendingAck) obj).getDestPort() == destPort;
+            return ((PendingAck) obj).getDestPort() == destPort;
         }
 
         return false;
@@ -67,6 +55,6 @@ public class PendingAck {
 
     @Override
     public String toString() {
-        return destIP + ":" + destPort;
+        return String.valueOf(destPort);
     }
 }

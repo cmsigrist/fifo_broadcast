@@ -12,28 +12,10 @@ import cs451.node.Node;
 import cs451.parser.Parser;
 
 public class Main {
-    // private static void handleSignal() {
-    // // immediately stop network packet processing
-    // System.out.println("Immediately stopping network packet processing.");
-    // // write/flush output file if necessary
-    // System.out.println("Writing output.");
-    // }
-
-    // private static void initSignalHandlers() {
-    // Runtime.getRuntime().addShutdownHook(new Thread() {
-    // @Override
-    // public void run() {
-    // handleSignal();
-    // }
-    // });
-    // }
 
     public static void main(String[] args) throws InterruptedException, SocketException {
         Parser parser = new Parser(args);
         parser.parse();
-
-        // TODO what happens if node is stopped before it is created ?
-        // initSignalHandlers();
 
         System.out.println("Doing some initialization\n");
 
@@ -61,6 +43,7 @@ public class Main {
 
         System.out.println("Initializing node\n");
         Node node;
+
         try {
             node = new Node(host, parser.output(), peers, numMessage);
 

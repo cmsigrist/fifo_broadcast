@@ -9,12 +9,11 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import cs451.broadcast.FIFOBroadcast;
-import cs451.messages.Packet;
+import cs451.messages.Message;
 
 public class Node implements NodeInterface {
     private final byte pid;
     private final String outputPath;
-    // private final int numMessage;
     private final Queue<String> newMessages;
 
     private final FIFOBroadcast fifoBroadcast;
@@ -47,10 +46,12 @@ public class Node implements NodeInterface {
         deliverThread = new Thread(() -> {
             System.out.println("Pid: " + Integer.valueOf(pid + 1).toString() + " starting to listen");
 
-            try {
-                fifoBroadcast.channelDeliver();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            while (true) {
+                try {
+                    fifoBroadcast.channelDeliver();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
         });
 
@@ -72,11 +73,11 @@ public class Node implements NodeInterface {
 
         IPCThread = new Thread(() -> {
             while (true) {
-                Packet packet = fifoBroadcast.getDeliverQueue().poll();
+                Message message = fifoBroadcast.getDeliverQueue().poll();
 
-                if (packet != null) {
+                if (message != null) {
                     try {
-                        fifoBroadcast.bebDeliver(packet);
+                        fifoBroadcast.bebDeliver(message);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }

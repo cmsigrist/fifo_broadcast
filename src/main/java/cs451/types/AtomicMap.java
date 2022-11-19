@@ -1,10 +1,12 @@
 package cs451.types;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Predicate;
 
-public class AtomicMap<K, V, T> {
-  private final HashMap<K, HashMap<V, T>> map;
+public class AtomicMap<K, V> {
+  private final HashMap<K, HashSet<V>> map;
   private final ReentrantLock lock;
 
   public AtomicMap() {
@@ -12,8 +14,8 @@ public class AtomicMap<K, V, T> {
     this.lock = new ReentrantLock();
   }
 
-  public HashMap<K, HashMap<V, T>> copy() {
-    HashMap<K, HashMap<V, T>> copy;
+  public HashMap<K, HashSet<V>> snapshot() {
+    HashMap<K, HashSet<V>> copy;
     lock.lock();
 
     try {
@@ -25,10 +27,8 @@ public class AtomicMap<K, V, T> {
     return copy;
   }
 
-  // Only use when T == V
-  @SuppressWarnings("unchecked")
   public void put(K key, V[] values) {
-    HashMap<V, T> newValues;
+    HashSet<V> newValues;
 
     lock.lock();
 
@@ -36,11 +36,11 @@ public class AtomicMap<K, V, T> {
       newValues = map.get(key);
 
       if (newValues == null) {
-        newValues = new HashMap<>();
+        newValues = new HashSet<>();
       }
 
       for (V value : values) {
-        newValues.put(value, (T) value);
+        newValues.add(value);
       }
 
       map.put(key, newValues);
@@ -49,8 +49,8 @@ public class AtomicMap<K, V, T> {
     }
   }
 
-  public void put(K key, V valueKey, T value) {
-    HashMap<V, T> newValues;
+  public void put(K key, V value) {
+    HashSet<V> newValues;
 
     lock.lock();
 
@@ -58,19 +58,19 @@ public class AtomicMap<K, V, T> {
       newValues = map.get(key);
 
       if (newValues == null) {
-        newValues = new HashMap<>();
+        newValues = new HashSet<>();
       }
 
-      newValues.put(valueKey, value);
+      newValues.add(value);
+
       map.put(key, newValues);
     } finally {
       lock.unlock();
     }
   }
 
-  // Return V or null if V does not exist in the map
-  public HashMap<V, T> get(K key) {
-    HashMap<V, T> value;
+  public HashSet<V> get(K key) {
+    HashSet<V> value;
     lock.lock();
 
     try {
@@ -92,36 +92,17 @@ public class AtomicMap<K, V, T> {
     }
   }
 
-  public boolean hasKey(K key) {
-    boolean hasKey = false;
+  public void removeElem(K key, Predicate<V> pred) {
     lock.lock();
 
     try {
-      hasKey = map.containsKey(key);
+      if (map.containsKey(key)) {
+        map.get(key).removeIf(pred);
+      }
     } finally {
       lock.unlock();
     }
-
-    return hasKey;
   }
-
-  // Give the total number of un acked message in flight (time num peers)
-  // for the total number of entries
-  public int size() {
-    int size = 0;
-    lock.lock();
-
-    try {
-      size += map.size();
-    } finally {
-      lock.unlock();
-    }
-
-    return size;
-  }
-
-  // Non atomic function to be used in combination when
-  // process has already acquired the lock
 
   public void acquireLock() {
     lock.lock();
@@ -131,7 +112,7 @@ public class AtomicMap<K, V, T> {
     lock.unlock();
   }
 
-  public HashMap<V, T> nonAtomicGet(K key) {
+  public HashSet<V> nonAtomicGet(K key) {
     return map.get(key);
   }
 
@@ -139,16 +120,16 @@ public class AtomicMap<K, V, T> {
     map.remove(key);
   }
 
-  public void nonAtomicPut(K key, V valueKey, T value) {
-    HashMap<V, T> newValues;
+  public void nonAtomicPut(K key, V value) {
+    HashSet<V> newValues;
 
     newValues = map.get(key);
 
     if (newValues == null) {
-      newValues = new HashMap<>();
+      newValues = new HashSet<>();
     }
 
-    newValues.put(valueKey, value);
+    newValues.add(value);
     map.put(key, newValues);
   }
 

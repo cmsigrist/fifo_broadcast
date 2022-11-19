@@ -6,34 +6,32 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Queue;
 
-import cs451.messages.Packet;
+import cs451.messages.Message;
 import cs451.network.UDPChannel;
 import cs451.types.AtomicMap;
 import cs451.types.PendingAck;
 
 public class PerfectLink {
-    // pid associated with the source of the link
-    // private final byte pid;
     private final String srcIP;
     private final int srcPort;
     // UDP channel associated to the link
     private final UDPChannel UDPChannel;
     // TODO optimise such that message are resent in seqNum order
-    private final AtomicMap<Packet, String, PendingAck> pendingAcks;
+    private final AtomicMap<Message, PendingAck> pendingAcks;
     // List containing the keys of messages that were acked
-    private final Queue<Packet> bebDeliverQueue;
+    private final Queue<Message> bebDeliverQueue;
 
-    public PerfectLink(byte pid, String srcIp, int srcPort, AtomicMap<Packet, String, PendingAck> pendingAcks,
-            Queue<Packet> bebDeliverQueue) throws SocketException {
+    public PerfectLink(byte pid, String srcIp, int srcPort, AtomicMap<Message, PendingAck> pendingAcks,
+            Queue<Message> bebDeliverQueue) throws SocketException {
         try {
             this.UDPChannel = new UDPChannel(srcIp, srcPort);
         } catch (SocketException e) {
             throw new SocketException(e.getMessage());
         }
 
-        // this.pid = pid;
         this.srcIP = srcIp;
         this.srcPort = srcPort;
         this.pendingAcks = pendingAcks;
@@ -41,15 +39,15 @@ public class PerfectLink {
     }
 
     // Sends a single message
-    public void send(Packet packet) throws IOException {
+    public void send(Message message) throws IOException {
         try {
-            System.out.println("sending: " + packet.toString() + " to : " +
-                    packet.getDestPort());
+            // System.out.println("sending: " + message.toString() + " to : " +
+            // message.getDestPort());
 
-            PendingAck pendingAck = new PendingAck(packet.getDestIP(), packet.getDestPort());
-            pendingAcks.put(packet, pendingAck.getKey(), pendingAck);
+            PendingAck pendingAck = new PendingAck(message.getDestPort());
+            pendingAcks.put(message, pendingAck);
 
-            P2PSend(packet);
+            P2PSend(message);
         } catch (IOException e) {
             throw new IOException("Error while sending message: " + e.getMessage());
         }
@@ -57,18 +55,17 @@ public class PerfectLink {
 
     // Sends all the message
     public void waitForAck() throws IOException, InterruptedException {
-        HashMap<Packet, HashMap<String, PendingAck>> pendingAcksCopy = pendingAcks.copy();
+        HashMap<Message, HashSet<PendingAck>> pendingAcksCopy = pendingAcks.snapshot();
         // Snapshot
 
         System.out.println("WaitForAck pendingAcks: " + pendingAcksCopy);
 
-        ArrayList<Packet> packets = new ArrayList<>(pendingAcksCopy.keySet());
+        ArrayList<Message> messages = new ArrayList<>(pendingAcksCopy.keySet());
 
-        for (Packet packet : packets) {
-            ArrayList<PendingAck> pending = new ArrayList<>(pendingAcksCopy.get(packet).values());
+        for (Message message : messages) {
+            ArrayList<PendingAck> pending = new ArrayList<>(pendingAcksCopy.get(message));
 
-            packet.setRelayIP(srcIP);
-            packet.setRelayPort(srcPort);
+            message.setRelayPort(srcPort);
 
             for (PendingAck p : pending) {
                 if (p.hasTimedOut()) {
@@ -76,23 +73,24 @@ public class PerfectLink {
 
                     try {
                         // Check if it hasn't been acked in the meantime
-                        boolean stillPending = pendingAcks.nonAtomicGet(packet).containsKey(p.getKey());
+                        boolean stillPending = pendingAcks.nonAtomicGet(message).contains(p);
 
                         if (stillPending) {
                             try {
-                                packet.setDestIP(p.getDestIP());
-                                packet.setDestPort(p.getDestPort());
+                                message.setDestPort(p.getDestPort());
 
                                 System.out.println(
-                                        "WaitForAck resending: " + packet.toString() + " to: " +
-                                                packet.getDestPort());
+                                        "WaitForAck resending: " + message.toString() + " to: " +
+                                                message.getDestPort());
 
-                                P2PSend(packet);
+                                P2PSend(message);
                             } catch (IOException e) {
                                 System.out.println("Error while sending message: " + e.getMessage());
                             }
 
-                            pendingAcks.get(packet).get(p.getKey()).resetTimeout();
+                            pendingAcks.get(message).remove(p);
+                            p.resetTimeout();
+                            pendingAcks.put(message, p);
                         }
                     } finally {
                         pendingAcks.releaseLock();
@@ -102,11 +100,12 @@ public class PerfectLink {
         }
     }
 
-    public void P2PSend(Packet packet) throws IOException {
-        System.out.println("P2P sending packet: " + packet + " to: " + packet.getDestPort());
-        byte[] p = packet.marshall();
-        DatagramPacket d = new DatagramPacket(p, p.length, InetAddress.getByName(packet.getDestIP()),
-                packet.getDestPort());
+    public void P2PSend(Message message) throws IOException {
+        // System.out.println("P2P sending message: " + message + " to: " +
+        // message.getDestPort());
+        byte[] p = message.marshall();
+        DatagramPacket d = new DatagramPacket(p, p.length, InetAddress.getByName(srcIP),
+                message.getDestPort());
 
         try {
             UDPChannel.send(d);
@@ -117,42 +116,30 @@ public class PerfectLink {
 
     // This thread loops until SIGTERM or SIGSTOP
     public void channelDeliver() throws IOException {
-        while (true) {
-            try {
-                DatagramPacket d = UDPChannel.receive();
+        try {
+            DatagramPacket d = UDPChannel.receive();
 
-                if (d == null) {
-                    continue;
-                }
-                if (d.getPort() < 11000 || d.getPort() > 11999) {
-                    continue;
-                }
-
-                Packet packet = Packet.unmarshall(d);
-                deliver(packet);
-
-            } catch (IOException e) {
-                throw new IOException(e.getMessage());
+            if (d == null) {
+                return;
             }
+            if (d.getPort() < 11000 || d.getPort() > 11999) {
+                return;
+            }
+
+            Message message = Message.unmarshall(d);
+            deliver(message);
+
+        } catch (IOException e) {
+            throw new IOException(e.getMessage());
         }
     }
 
-    private void deliver(Packet packet) throws IOException {
-        System.out.println("P2P deliver: " + packet.toString());
-        pendingAcks.acquireLock();
+    private void deliver(Message message) throws IOException {
+        System.out.println("P2P deliver: " + message.toString());
 
-        try {
-            if (pendingAcks.nonAtomicHasKey(packet)) {
-                // System.out.println("P2P deliver received ack packet: " +
-                // packet.toString());
-
-                pendingAcks.nonAtomicGet(packet)
-                        .remove(PendingAck.getKey(packet.getRelayIP(), packet.getRelayPort()));
-            }
-        } finally {
-            pendingAcks.releaseLock();
-        }
-
-        bebDeliverQueue.offer(packet);
+        pendingAcks.removeElem(
+                message,
+                (PendingAck p) -> p.getDestPort() == message.getRelayPort());
+        bebDeliverQueue.offer(message);
     }
 }

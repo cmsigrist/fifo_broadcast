@@ -2,7 +2,6 @@ package cs451.broadcast;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -10,7 +9,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import cs451.link.PerfectLink;
 import cs451.messages.Message;
 import cs451.messages.MessageType;
-import cs451.messages.Packet;
 import cs451.node.Host;
 import cs451.types.AtomicArrayList;
 import cs451.types.AtomicMap;
@@ -19,30 +17,27 @@ import cs451.types.PendingAck;
 
 public class FIFOBroadcast {
   private final byte pid;
-  private final String srcIP;
   private final int srcPort;
   private final ArrayList<Host> peers;
   private final PerfectLink p2pLink;
 
-  private final AtomicMap<Message, String, String> ackedMessage;
-  private final AtomicMap<Packet, String, PendingAck> pendingAcks;
-  private final AtomicSet<Packet> forwarded;
+  private final AtomicMap<Integer, Integer> ackedMessage;
+  private final AtomicMap<Message, PendingAck> pendingAcks;
+  private final AtomicSet<Message> forwarded;
   private final HashSet<Integer> delivered;
-  private final AtomicArrayList<Message> past;
 
-  private final Queue<Packet> buffer;
-  private final Queue<Packet> deliverQueue;
+  // private final Queue<Message> buffer;
+  private final Queue<Message> deliverQueue;
 
   private int seqNum = 0;
   private final AtomicArrayList<String> logs;
 
   private final int majority;
-  private final int BUFFER_THRESHOLD;
+  // private final int BUFFER_THRESHOLD;
 
   public FIFOBroadcast(byte pid, String srcIP, int srcPort, ArrayList<Host> peers)
       throws IOException {
     this.pid = pid;
-    this.srcIP = srcIP;
     this.srcPort = srcPort;
     this.peers = peers;
 
@@ -50,48 +45,46 @@ public class FIFOBroadcast {
     this.pendingAcks = new AtomicMap<>();
     forwarded = new AtomicSet<>();
     delivered = new HashSet<>();
-    past = new AtomicArrayList<>();
 
     deliverQueue = new ConcurrentLinkedQueue<>();
-    buffer = new ConcurrentLinkedQueue<>();
+    // buffer = new ConcurrentLinkedQueue<>();
 
     this.p2pLink = new PerfectLink(pid, srcIP, srcPort, pendingAcks, deliverQueue);
     logs = new AtomicArrayList<>();
 
     this.majority = 1 + (peers.size() / 2);
     // TODO tweak threshold to respect memory limitations
-    this.BUFFER_THRESHOLD = peers.size() * 10;
+    // this.BUFFER_THRESHOLD = peers.size() * 10;
   }
 
   public void broadcast(String payload) throws IOException {
     // TODO buffer payloads
     seqNum += 1;
-    Message message = new Message(pid, seqNum, payload, srcIP, srcPort);
-    Packet packet = new Packet(message, past.snapshot());
+    Message message = new Message(MessageType.CHAT_MESSAGE, pid, seqNum, srcPort);
 
     System.out.println("Fifo broadcast seqNum " + seqNum);
 
-    urbBroadcast(packet);
+    urbBroadcast(message);
     // fifoBroadcast
     logs.add(message.broadcast());
-    past.add(message);
 
-    String[] ackValues = { Packet.getKey(srcIP, srcPort) };
-    ackedMessage.put(message, ackValues);
+    ackedMessage.put(message.hashCode(), srcPort);
   }
 
-  public void urbBroadcast(Packet packet) throws IOException {
-    forwarded.add(packet);
+  public void urbBroadcast(Message message) throws IOException {
+    forwarded.add(message);
 
-    bebBroadcast(packet);
+    bebBroadcast(message);
   }
 
-  public void bebBroadcast(Packet packet) throws IOException {
+  public void bebBroadcast(Message message) throws IOException {
     for (Host peer : peers) {
-      packet.setRelayPacket(MessageType.CHAT_MESSAGE, srcIP, srcPort, peer.getIp(), peer.getPort());
+      message.setDestPort(peer.getPort());
+
       System.out.println("Beb broadcast packet: " +
-          packet.toString() + " to : " + peer.getPort());
-      p2pLink.send(packet);
+          message.toString() + " to : " + peer.getPort());
+
+      p2pLink.send(message);
     }
   }
 
@@ -103,100 +96,107 @@ public class FIFOBroadcast {
     }
   }
 
-  public void deliver(Message message) {
-    System.out.println("FIFO delivering packet: " + message.toString());
+  public void deliver(byte pid, int seqNum) {
+    System.out.println("FIFO delivering packet pid: " + pid + " seqNum: " + seqNum);
 
-    delivered.add(message.hashCode());
-    logs.addIfNotInArray(message.delivered());
+    delivered.add(Message.hashCode(pid, seqNum));
+    logs.addIfNotInArray(Message.delivered(pid, seqNum));
 
     // System.out.println("FIFO deliver finished");
   }
 
-  public void urbDeliver(Packet packet) {
-    Message message = packet.getMessage();
-
-    System.out.println("Urb delivering packet: " + packet.toString());
+  public void urbDeliver(Message message) {
+    System.out.println("Urb delivering packet: " + message.toString());
 
     if (!delivered.contains(message.hashCode())) {
-      ArrayList<Message> packetPast = packet.getPast();
-      System.out.println("Urb deliver past: " + packetPast);
+      int seqNum = message.getSeqNum();
+      int s = seqNum;
+      boolean d = false;
+      byte pid = message.getPid();
 
-      for (Message m : packetPast) {
-        if (!delivered.contains(m.hashCode())) {
-          deliver(m);
+      while (s > 1 && !d) {
+        s--;
+        if (delivered.contains(Message.hashCode(pid, s))) {
+          d = true;
         }
       }
 
-      deliver(message);
+      while (s < seqNum) {
+        deliver(pid, s);
+        s++;
+      }
+
+      deliver(message.getPid(), message.getSeqNum());
     }
 
     // Clean up the structure if everyone delivered the packet
-    // TODO maybe change to majority have acked
-    int numAcks = ackedMessage.get(message).size();
-
+    int numAcks = ackedMessage.get(message.hashCode()).size();
     if (numAcks == peers.size()) {
-      System.out.println("Urb deliver cleaning up: " + packet.toString());
-      forwarded.remove(packet);
-      ackedMessage.remove(message);
-      delivered.remove(message.hashCode());
-      past.remove(message);
+      cleanUp(message);
     }
   }
 
   public void heartbeat() {
-    ArrayList<Packet> f = new ArrayList<>(forwarded.snapshot());
+    ArrayList<Message> f = new ArrayList<>(forwarded.snapshot());
     System.out.println("Heartbeat forwarded: " + f);
 
-    for (Packet packet : f) {
-      Message message = packet.getMessage();
+    for (Message message : f) {
       // if majority have acked m and m not delivered
-      System.out.println("Heartbeat  " + packet.toString() + " acks: " + ackedMessage.get(message) + " majority: "
-          + (ackedMessage.get(message).size() >= majority));
+      System.out
+          .println("Heartbeat  " + message.toString() + " acks: "
+              + ackedMessage.get(message.hashCode()) + " majority: "
+              + (ackedMessage.get(message.hashCode()).size() >= majority));
 
-      if (ackedMessage.get(message).size() >= majority && !delivered.contains(message.hashCode())) {
-        System.out.println("Heartbeat urbDeliver packet: " + packet.toString());
-        urbDeliver(packet);
+      if (ackedMessage.get(message.hashCode()).size() >= majority &&
+          !delivered.contains(message.hashCode())) {
+        System.out.println("Heartbeat urbDeliver packet: " + message.toString());
+        urbDeliver(message);
       }
     }
 
     System.out.println("Heartbeat finished check");
   }
 
-  public void bebDeliver(Packet packet) throws IOException {
-    Message message = packet.getMessage();
-    String packetKey = packet.getKey();
-
+  public void bebDeliver(Message message) throws IOException {
     // Send ack if first time received an ack for the packet from the source
-    if (packet.getType() == MessageType.ACK_MESSAGE) {
-      HashMap<String, String> acks = ackedMessage.get(message);
+    Integer[] ackValues = {
+        message.getRelayPort(),
+        message.getOriginPort(),
+        srcPort
+    };
 
-      if (acks != null && !acks.containsKey(packetKey)) {
-        packet.setRelayPacket(MessageType.ACK_MESSAGE, srcIP, srcPort, packet.getRelayIP(), packet.getRelayPort());
-        System.out.println("beb deliver P2P sending ACK: " + packet.toString() + " to: " + packet.getDestPort());
-        p2pLink.P2PSend(packet);
+    if (message.getType() == MessageType.ACK_MESSAGE) {
+      HashSet<Integer> acks = ackedMessage.get(message.hashCode());
+
+      if (acks != null && !acks.contains(message.getRelayPort())) {
+        message.setRelayMessage(MessageType.ACK_MESSAGE, srcPort, message.getRelayPort());
+
+        System.out.println("beb deliver P2P sending ACK: " + message.toString()
+            + " to: " + message.getDestPort());
+        p2pLink.P2PSend(message);
       }
     }
 
-    String[] ackValues = {
-        packetKey,
-        Packet.getKey(message.getOriginIP(), message.getOriginPort()),
-        Packet.getKey(srcIP, srcPort)
-    };
+    // TODO check if need to do all the time ?
+    ackedMessage.put(message.hashCode(), ackValues);
 
-    ackedMessage.put(message, ackValues);
-
-    System.out.println("bebDeliver: " + packet.toString());
+    System.out.println("bebDeliver: " + message.toString());
     System.out
-        .println("bebDeliver ackedMessage for: " + packet.toString() + " acks update: " + ackedMessage.get(message));
+        .println("bebDeliver ackedMessage for: " + message.toString() + " acks update: "
+            + ackedMessage.get(message.hashCode()));
 
     // Forward message with ACK
-    if (!forwarded.contains(packet)) {
+    if (!forwarded.contains(message)) {
       // set yourself as the relay and forward (broadcast) once the message
-      forwarded.add(packet);
+      // TODO don't put if already delivered ?
+      forwarded.add(message);
       System.out.println("bebDeliver forwarded: " + forwarded.snapshot());
-      packet.setRelayPacket(MessageType.ACK_MESSAGE, srcIP, srcPort, packet.getRelayIP(), packet.getRelayPort());
+      message.setRelayMessage(MessageType.ACK_MESSAGE, srcPort, message.getRelayPort());
 
-      bebBroadcast(packet);
+      bebBroadcast(message);
+      // Make sure heartbeat is run sometimes (if the node is flooded with
+      // deliver, it sometimes never context switch to heartbeatThread)
+      heartbeat();
     }
   }
 
@@ -204,11 +204,21 @@ public class FIFOBroadcast {
     p2pLink.waitForAck();
   }
 
+  // TODO clean up seqNum 1 -> n
+  private void cleanUp(Message message) {
+    System.out.println("Urb deliver cleaning up delivered: " + message.toString());
+
+    delivered.remove(message.hashCode());
+    forwarded.remove(message);
+    ackedMessage.remove(message.hashCode());
+    pendingAcks.remove(message);
+  }
+
   public ArrayList<String> getLogs() {
     return logs.nonAtomicSnapshot();
   }
 
-  public Queue<Packet> getDeliverQueue() {
+  public Queue<Message> getDeliverQueue() {
     return deliverQueue;
   }
 }
