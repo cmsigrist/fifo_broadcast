@@ -16,8 +16,8 @@ public class AtomicMap<K, V> {
 
   public HashMap<K, HashSet<V>> snapshot() {
     HashMap<K, HashSet<V>> copy;
-    lock.lock();
 
+    lock.lock();
     try {
       copy = new HashMap<>(map);
     } finally {
@@ -27,11 +27,40 @@ public class AtomicMap<K, V> {
     return copy;
   }
 
+  public int size() {
+    int size = 0;
+
+    lock.lock();
+    try {
+      for (HashSet<V> h : map.values()) {
+        size += h.size();
+      }
+    } finally {
+      lock.unlock();
+    }
+
+    return size;
+  }
+
+  public int size(K key) {
+    int size = 0;
+
+    lock.lock();
+    try {
+      if (map.containsKey(key)) {
+        size += map.get(key).size();
+      }
+    } finally {
+      lock.unlock();
+    }
+
+    return size;
+  }
+
   public void put(K key, V[] values) {
     HashSet<V> newValues;
 
     lock.lock();
-
     try {
       newValues = map.get(key);
 
@@ -53,7 +82,6 @@ public class AtomicMap<K, V> {
     HashSet<V> newValues;
 
     lock.lock();
-
     try {
       newValues = map.get(key);
 
@@ -71,8 +99,8 @@ public class AtomicMap<K, V> {
 
   public HashSet<V> get(K key) {
     HashSet<V> value;
-    lock.lock();
 
+    lock.lock();
     try {
       value = map.get(key);
     } finally {
@@ -84,7 +112,6 @@ public class AtomicMap<K, V> {
 
   public void remove(K key) {
     lock.lock();
-
     try {
       map.remove(key);
     } finally {
@@ -94,7 +121,6 @@ public class AtomicMap<K, V> {
 
   public void removeElem(K key, Predicate<V> pred) {
     lock.lock();
-
     try {
       if (map.containsKey(key)) {
         map.get(key).removeIf(pred);

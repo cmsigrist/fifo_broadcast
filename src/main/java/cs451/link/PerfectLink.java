@@ -8,6 +8,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Queue;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
 
 import cs451.messages.Message;
 import cs451.network.UDPChannel;
@@ -24,8 +26,11 @@ public class PerfectLink {
     // List containing the keys of messages that were acked
     private final Queue<Message> bebDeliverQueue;
 
+    private final Lock lock;
+    private final Condition notFull;
+
     public PerfectLink(byte pid, String srcIp, int srcPort, AtomicMap<Message, PendingAck> pendingAcks,
-            Queue<Message> bebDeliverQueue) throws SocketException {
+            Queue<Message> bebDeliverQueue, Lock lock, Condition notFull) throws SocketException {
         try {
             this.UDPChannel = new UDPChannel(srcIp, srcPort);
         } catch (SocketException e) {
@@ -36,6 +41,8 @@ public class PerfectLink {
         this.srcPort = srcPort;
         this.pendingAcks = pendingAcks;
         this.bebDeliverQueue = bebDeliverQueue;
+        this.lock = lock;
+        this.notFull = notFull;
     }
 
     // Sends a single message
@@ -134,12 +141,21 @@ public class PerfectLink {
         }
     }
 
-    private void deliver(Message message) throws IOException {
+    private synchronized void deliver(Message message) throws IOException {
         System.out.println("P2P deliver: " + message.toString());
-
         pendingAcks.removeElem(
                 message,
                 (PendingAck p) -> p.getDestPort() == message.getRelayPort());
+
+        lock.lock();
+        try {
+
+            notFull.signal();
+        } finally {
+            lock.unlock();
+        }
+
+        System.out.println("P2P deliver pendingAcks.size: " + pendingAcks.size());
         bebDeliverQueue.offer(message);
     }
 }

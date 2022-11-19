@@ -8,8 +8,8 @@ import java.util.StringJoiner;
 public class Message {
     // process that sent the message
     private final byte pid;
-    private final int seqNum;
-    private final int originPort;
+    private int seqNum;
+    private int originPort;
 
     private byte type;
     private int relayPort;
@@ -20,6 +20,12 @@ public class Message {
         this.pid = pid;
         this.seqNum = seqNum;
         this.originPort = originPort;
+    }
+
+    // Used to clean up
+    public Message(byte pid, int seqNum) {
+        this.pid = pid;
+        this.seqNum = seqNum;
     }
 
     public byte getType() {
@@ -48,6 +54,10 @@ public class Message {
 
     public void setType(byte type) {
         this.type = type;
+    }
+
+    public void setSeqNum(int seqNum) {
+        this.seqNum = seqNum;
     }
 
     public void setRelayPort(int relayPort) {

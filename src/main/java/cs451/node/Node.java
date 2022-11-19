@@ -66,6 +66,8 @@ public class Node implements NodeInterface {
                         fifoBroadcast.broadcast(newMessage);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
                     }
                 }
             }
@@ -90,7 +92,7 @@ public class Node implements NodeInterface {
                 fifoBroadcast.heartbeat();
 
                 try {
-                    Thread.sleep(200);
+                    Thread.sleep(300);
                 } catch (InterruptedException e) {
                 }
             }
@@ -101,7 +103,7 @@ public class Node implements NodeInterface {
                 try {
                     fifoBroadcast.waitForAck();
 
-                    Thread.sleep(500);
+                    Thread.sleep(400);
                 } catch (IOException | InterruptedException e) {
                     throw new RuntimeException(e);
                 }

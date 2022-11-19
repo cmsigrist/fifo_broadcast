@@ -14,7 +14,6 @@ public class AtomicSet<T> {
 
   public void add(T e) {
     lock.lock();
-
     try {
       set.add(e);
     } finally {
@@ -22,20 +21,23 @@ public class AtomicSet<T> {
     }
   }
 
-  public void remove(T e) {
-    lock.lock();
+  public boolean remove(T e) {
+    boolean removed = false;
 
+    lock.lock();
     try {
-      set.remove(e);
+      removed = set.remove(e);
     } finally {
       lock.unlock();
     }
+
+    return removed;
   }
 
   public boolean contains(T e) {
     boolean has = false;
-    lock.lock();
 
+    lock.lock();
     try {
       has = set.contains(e);
     } finally {
@@ -49,7 +51,6 @@ public class AtomicSet<T> {
     HashSet<T> hashSet;
 
     lock.lock();
-
     try {
       hashSet = new HashSet<>(set);
     } finally {
