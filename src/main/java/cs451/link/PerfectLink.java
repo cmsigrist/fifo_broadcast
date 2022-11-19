@@ -13,7 +13,7 @@ import java.util.concurrent.locks.Lock;
 
 import cs451.messages.Message;
 import cs451.network.UDPChannel;
-import cs451.types.AtomicMap;
+import cs451.types.AtomicMapOfSet;
 import cs451.types.PendingAck;
 
 public class PerfectLink {
@@ -22,14 +22,14 @@ public class PerfectLink {
     // UDP channel associated to the link
     private final UDPChannel UDPChannel;
     // TODO optimise such that message are resent in seqNum order
-    private final AtomicMap<Message, PendingAck> pendingAcks;
+    private final AtomicMapOfSet<Message, PendingAck> pendingAcks;
     // List containing the keys of messages that were acked
     private final Queue<Message> bebDeliverQueue;
 
     private final Lock lock;
     private final Condition notFull;
 
-    public PerfectLink(byte pid, String srcIp, int srcPort, AtomicMap<Message, PendingAck> pendingAcks,
+    public PerfectLink(byte pid, String srcIp, int srcPort, AtomicMapOfSet<Message, PendingAck> pendingAcks,
             Queue<Message> bebDeliverQueue, Lock lock, Condition notFull) throws SocketException {
         try {
             this.UDPChannel = new UDPChannel(srcIp, srcPort);

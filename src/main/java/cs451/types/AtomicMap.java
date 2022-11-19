@@ -1,12 +1,10 @@
 package cs451.types;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Predicate;
 
-public class AtomicMap<K, V> {
-  private final HashMap<K, HashSet<V>> map;
+public class AtomicMap {
+  private final HashMap<Byte, Forwarded> map;
   private final ReentrantLock lock;
 
   public AtomicMap() {
@@ -14,8 +12,8 @@ public class AtomicMap<K, V> {
     this.lock = new ReentrantLock();
   }
 
-  public HashMap<K, HashSet<V>> snapshot() {
-    HashMap<K, HashSet<V>> copy;
+  public HashMap<Byte, Forwarded> snapshot() {
+    HashMap<Byte, Forwarded> copy;
 
     lock.lock();
     try {
@@ -27,78 +25,25 @@ public class AtomicMap<K, V> {
     return copy;
   }
 
-  public int size() {
-    int size = 0;
-
+  public void put(Byte key, int seqNum) {
     lock.lock();
     try {
-      for (HashSet<V> h : map.values()) {
-        size += h.size();
-      }
-    } finally {
-      lock.unlock();
-    }
+      Forwarded forwarded = map.get(key);
 
-    return size;
-  }
-
-  public int size(K key) {
-    int size = 0;
-
-    lock.lock();
-    try {
-      if (map.containsKey(key)) {
-        size += map.get(key).size();
-      }
-    } finally {
-      lock.unlock();
-    }
-
-    return size;
-  }
-
-  public void put(K key, V[] values) {
-    HashSet<V> newValues;
-
-    lock.lock();
-    try {
-      newValues = map.get(key);
-
-      if (newValues == null) {
-        newValues = new HashSet<>();
+      if (forwarded == null) {
+        forwarded = new Forwarded(seqNum);
+      } else {
+        forwarded.update(seqNum);
       }
 
-      for (V value : values) {
-        newValues.add(value);
-      }
-
-      map.put(key, newValues);
+      map.put(key, forwarded);
     } finally {
       lock.unlock();
     }
   }
 
-  public void put(K key, V value) {
-    HashSet<V> newValues;
-
-    lock.lock();
-    try {
-      newValues = map.get(key);
-
-      if (newValues == null) {
-        newValues = new HashSet<>();
-      }
-
-      newValues.add(value);
-
-      map.put(key, newValues);
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  public HashSet<V> get(K key) {
-    HashSet<V> value;
+  public Forwarded get(Byte key) {
+    Forwarded value;
 
     lock.lock();
     try {
@@ -110,56 +55,18 @@ public class AtomicMap<K, V> {
     return value;
   }
 
-  public void remove(K key) {
-    lock.lock();
-    try {
-      map.remove(key);
-    } finally {
-      lock.unlock();
-    }
-  }
+  public boolean contains(Byte key, int seqNum) {
+    boolean contains = false;
 
-  public void removeElem(K key, Predicate<V> pred) {
     lock.lock();
     try {
       if (map.containsKey(key)) {
-        map.get(key).removeIf(pred);
+        contains = map.get(key).contains(seqNum);
       }
     } finally {
       lock.unlock();
     }
-  }
 
-  public void acquireLock() {
-    lock.lock();
-  }
-
-  public void releaseLock() {
-    lock.unlock();
-  }
-
-  public HashSet<V> nonAtomicGet(K key) {
-    return map.get(key);
-  }
-
-  public void nonAtomicRemove(K key) {
-    map.remove(key);
-  }
-
-  public void nonAtomicPut(K key, V value) {
-    HashSet<V> newValues;
-
-    newValues = map.get(key);
-
-    if (newValues == null) {
-      newValues = new HashSet<>();
-    }
-
-    newValues.add(value);
-    map.put(key, newValues);
-  }
-
-  public boolean nonAtomicHasKey(K key) {
-    return map.containsKey(key);
+    return contains;
   }
 }
