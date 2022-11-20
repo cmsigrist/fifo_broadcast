@@ -59,4 +59,9 @@ public class Forwarded {
   public boolean contains(int seqNum) {
     return seqNum <= range || seqNums.contains(seqNum);
   }
+
+  @Override
+  public String toString() {
+    return "{range: " + range + " seqNums: " + seqNums + "}";
+  }
 }

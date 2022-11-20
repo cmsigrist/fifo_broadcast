@@ -2,6 +2,7 @@ package cs451.broadcast;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -14,8 +15,10 @@ import cs451.messages.Message;
 import cs451.messages.MessageType;
 import cs451.node.Host;
 import cs451.types.AtomicArrayList;
+import cs451.types.AtomicMap;
 import cs451.types.AtomicMapOfSet;
 import cs451.types.AtomicSet;
+import cs451.types.Forwarded;
 import cs451.types.PendingAck;
 
 public class FIFOBroadcast {
@@ -26,8 +29,7 @@ public class FIFOBroadcast {
 
   private final AtomicMapOfSet<Integer, Integer> ackedMessage;
   private final AtomicMapOfSet<Message, PendingAck> pendingAcks;
-  // private final AtomicMap forwarded;
-  private final AtomicSet<Message> forwarded;
+  private final AtomicMap forwarded;
   private final AtomicSet<Integer> delivered;
 
   final Lock lock = new ReentrantLock();
@@ -53,9 +55,8 @@ public class FIFOBroadcast {
 
     ackedMessage = new AtomicMapOfSet<>();
     this.pendingAcks = new AtomicMapOfSet<>();
-    forwarded = new AtomicSet<>();
-    // forwarded = new AtomicMap();
-    // forwarded.put(pid, 1);
+    forwarded = new AtomicMap();
+    forwarded.put(pid, 1);
     delivered = new AtomicSet<>();
 
     deliverQueue = new ConcurrentLinkedQueue<>();
@@ -96,8 +97,7 @@ public class FIFOBroadcast {
   }
 
   public void urbBroadcast(Message message) throws IOException {
-    // forwarded.get(pid).setRange(message.getSeqNum());
-    forwarded.add(message);
+    forwarded.get(pid).setRange(message.getSeqNum());
     bebBroadcast(message);
   }
 
@@ -129,14 +129,13 @@ public class FIFOBroadcast {
     // System.out.println("FIFO deliver finished");
   }
 
-  public void urbDeliver(Message message) {
-    System.out.println("Urb delivering packet: " + message.toString());
+  public void urbDeliver(byte pid, int seqNum) {
+    System.out.println("Urb delivering packet: { pid: " + pid + " seqNum: "
+        + seqNum + " }");
 
-    if (!delivered.contains(message.hashCode())) {
-      int seqNum = message.getSeqNum();
+    if (!delivered.contains(Message.hashCode(pid, seqNum))) {
       int s = seqNum;
       boolean d = false;
-      byte pid = message.getPid();
 
       while (s > 1 && !d) {
         s--;
@@ -150,61 +149,37 @@ public class FIFOBroadcast {
         s++;
       }
 
-      deliver(message.getPid(), message.getSeqNum());
+      deliver(pid, seqNum);
     }
   }
 
   public void heartbeat() {
-    ArrayList<Message> f = new ArrayList<>(forwarded.snapshot());
-    System.out.println("Heartbeat forwarded: " + f);
+    HashMap<Byte, Forwarded> forwardedSnapshot = new HashMap<>(forwarded.snapshot());
+    System.out.println("Heartbeat forwarded: " + forwardedSnapshot);
+    for (Byte pid : forwardedSnapshot.keySet()) {
+      Forwarded f = forwardedSnapshot.get(pid);
+      ArrayList<Integer> seqNums = new ArrayList<>(f.getSeqNums());
+      int range = f.getRange();
 
-    for (Message message : f) {
-      // if majority have acked m and m not delivered
-      // System.out
-      // .println("Heartbeat " + message.toString() + " acks: "
-      // + ackedMessage.get(message.hashCode()) + " majority: "
-      // + (ackedMessage.size(message.hashCode()) >= majority));
+      for (int i = 1; i <= range; i++) {
+        seqNums.add(i);
+      }
 
-      int numAcks = ackedMessage.size(message.hashCode());
-      if (numAcks >= majority) {
-        if (!delivered.contains(message.hashCode())) {
-          System.out.println("Heartbeat urbDeliver packet: " + message.toString());
-          urbDeliver(message);
-        }
+      for (int seqNum : seqNums) {
+        int numAcks = ackedMessage.size(Message.hashCode(pid, seqNum));
+        if (numAcks >= majority) {
+          if (!delivered.contains(Message.hashCode(pid, seqNum))) {
+            System.out.println("Heartbeat urbDeliver packet: { pid: " + pid + " seqNum: "
+                + seqNum + " }");
+            urbDeliver(pid, seqNum);
+          }
 
-        if (numAcks == peers.size() + 1) {
-          cleanUp(message);
+          if (numAcks == peers.size() + 1) {
+            cleanUp(pid, seqNum);
+          }
         }
       }
     }
-
-    // HashMap<Byte, Forwarded> forwardedSnapshot = new
-    // HashMap<>(forwarded.snapshot());
-    // System.out.println("Heartbeat forwarded: " + forwardedSnapshot);
-    // for (Byte pid : forwardedSnapshot.keySet()) {
-    // Forwarded f = forwardedSnapshot.get(pid);
-    // ArrayList<Integer> seqNums = new ArrayList<>(f.getSeqNums());
-    // int range = f.getRange();
-
-    // for (int i = 1; i <= range; i++) {
-    // seqNums.add(i);
-    // }
-
-    // for (int seqNum : seqNums) {
-    // int numAcks = ackedMessage.size(Message.hashCode(pid, seqNum));
-    // if (numAcks >= majority) {
-    // if (!delivered.contains(Message.hashCode(pid, seqNum))) {
-    // System.out.println("Heartbeat urbDeliver packet: { pid: " + pid + " seqNum: "
-    // + seqNum + " }");
-    // urbDeliver(pid, seqNum);
-    // }
-
-    // if (numAcks == peers.size() + 1) {
-    // cleanUp(message);
-    // }
-    // }
-    // }
-    // }
 
     System.out.println("Heartbeat finished check");
   }
@@ -240,11 +215,9 @@ public class FIFOBroadcast {
             + ackedMessage.get(message.hashCode()));
 
     // Forward message with ACK
-    // if (!forwarded.contains(message.getPid(), message.getSeqNum())) {
-    if (!forwarded.contains(message)) {
+    if (!forwarded.contains(message.getPid(), message.getSeqNum())) {
       // set yourself as the relay and forward (broadcast) once the message
-      forwarded.add(message);
-      // forwarded.put(message.getPid(), message.getSeqNum());
+      forwarded.put(message.getPid(), message.getSeqNum());
       System.out.println("bebDeliver forwarded: " + forwarded.snapshot());
       message.setRelayMessage(MessageType.ACK_MESSAGE, srcPort, message.getRelayPort());
 
@@ -257,25 +230,19 @@ public class FIFOBroadcast {
     p2pLink.waitForAck();
   }
 
-  private void cleanUp(Message message) {
+  private void cleanUp(byte pid, int seqNum) {
+    Message message = new Message(pid, seqNum);
     System.out.println("Cleaning up: " + message.toString());
-
-    delivered.remove(message.hashCode());
-    ackedMessage.remove(message.hashCode());
-    pendingAcks.remove(message);
-
-    int s = message.getSeqNum() - 1;
     boolean finished = false;
-    Message m = new Message(pid, s);
 
-    while (s > 0 && !finished) {
+    while (seqNum > 0 && !finished) {
       // remove returns true if it hasn't been removed yet
-      finished = !delivered.remove(m.hashCode());
-      ackedMessage.remove(m.hashCode());
-      pendingAcks.remove(m);
+      finished = !delivered.remove(message.hashCode());
+      ackedMessage.remove(message.hashCode());
+      pendingAcks.remove(message);
 
-      s--;
-      m.setSeqNum(s);
+      seqNum--;
+      message.setSeqNum(seqNum);
     }
   }
 
