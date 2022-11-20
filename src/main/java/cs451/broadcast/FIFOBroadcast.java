@@ -74,7 +74,7 @@ public class FIFOBroadcast {
     lock.lock();
     try {
       seqNum += 1;
-      Message message = new Message(MessageType.CHAT_MESSAGE, pid, seqNum, srcPort);
+      Message message = new Message(MessageType.CHAT_MESSAGE, pid, seqNum);
 
       System.out.println("Fifo broadcast seqNum " + seqNum);
       buffer.offer(message);
@@ -188,7 +188,6 @@ public class FIFOBroadcast {
     // Send ack if first time received an ack for the packet from the source
     Integer[] ackValues = {
         message.getRelayPort(),
-        message.getOriginPort(),
         srcPort
     };
 
@@ -205,9 +204,6 @@ public class FIFOBroadcast {
 
       ackedMessage.put(message.hashCode(), ackValues);
     }
-
-    // TODO check if need to do all the time ?
-    // ackedMessage.put(message.hashCode(), ackValues);
 
     System.out.println("bebDeliver: " + message.toString());
     System.out

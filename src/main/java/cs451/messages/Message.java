@@ -9,17 +9,15 @@ public class Message {
     // process that sent the message
     private final byte pid;
     private int seqNum;
-    private int originPort;
 
     private byte type;
     private int relayPort;
     private int destPort;
 
-    public Message(byte type, byte pid, int seqNum, int originPort) {
+    public Message(byte type, byte pid, int seqNum) {
         this.type = type;
         this.pid = pid;
         this.seqNum = seqNum;
-        this.originPort = originPort;
     }
 
     // Used to clean up
@@ -38,10 +36,6 @@ public class Message {
 
     public int getSeqNum() {
         return seqNum;
-    }
-
-    public int getOriginPort() {
-        return originPort;
     }
 
     public int getRelayPort() {
@@ -80,8 +74,7 @@ public class Message {
         stringJoiner
                 .add(Byte.toString(type))
                 .add(Byte.toString(pid))
-                .add(Integer.toString(seqNum))
-                .add(Integer.toString(originPort));
+                .add(Integer.toString(seqNum));
         byte[] payload = stringJoiner.toString().getBytes();
         short packetLength = (short) payload.length;
 
@@ -106,9 +99,8 @@ public class Message {
         byte type = Byte.valueOf(fields[0]);
         byte pid = Byte.valueOf(fields[1]);
         int seqNum = Integer.parseInt(fields[2]);
-        int originPort = Integer.parseInt(fields[3]);
 
-        Message message = new Message(type, pid, seqNum, originPort);
+        Message message = new Message(type, pid, seqNum);
         message.setRelayPort(d.getPort());
 
         return message;
