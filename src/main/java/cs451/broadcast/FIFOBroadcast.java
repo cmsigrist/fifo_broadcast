@@ -76,7 +76,6 @@ public class FIFOBroadcast {
       System.out.println("Fifo broadcast seqNum " + seqNum + " pendingAcks.size: " + pendingAcks.size());
 
       while (pendingAcks.size() > PENDING_THRESHOLD) {
-        // System.out.println("FIFO broadcast waiting");
         notFull.await();
       }
 
@@ -99,10 +98,6 @@ public class FIFOBroadcast {
   public void bebBroadcast(Message message) throws IOException {
     for (Host peer : peers) {
       message.setDestPort(peer.getPort());
-
-      // System.out.println("Beb broadcast packet: " +
-      // message.toString() + " to : " + peer.getPort());
-
       p2pLink.send(message);
     }
   }
@@ -120,15 +115,10 @@ public class FIFOBroadcast {
         + " seqNum: " + seqNum + "}");
 
     delivered.put(pid, seqNum);
-    // System.err.println("FIFO delivered[" + (pid + 1) + "]: " +
-    // delivered.get(pid));
     logs.addIfNotInArray(Message.delivered(pid, seqNum));
-
-    // System.out.println("FIFO deliver finished");
   }
 
   public void urbDeliver(Message message) {
-    // System.out.println("urbDeliver message: " + message.toString());
     // System.err.println("urbdeliver delivered[" + (message.getPid() + 1) + "]: " +
     // delivered.get(message.getPid()));
 
@@ -149,12 +139,9 @@ public class FIFOBroadcast {
       }
 
       s += 1; // last s was delivered, deliver from [s+1, seqNum]
-      // System.out.println("urbDeliver s = " + s);
       while (s < message.getSeqNum()) {
-        // System.out.println("urbDeliver past message: " + "{pid: " + (pid + 1)
-        // + " seqNum: " + s + "}");
         deliver(pid, s);
-
+        // Might not have seen it, but put in anyway
         forwarded.put(pid, s);
         s++;
       }
@@ -172,17 +159,7 @@ public class FIFOBroadcast {
       ArrayList<Integer> seqNums = new ArrayList<>(f.getSeqNums());
       int range = f.getRange();
 
-      // TODO bugged, can still cleanup ?
-      // should it only retry for delivered up to ?
-      // if (delivered.contains(pid, range)) {
-      // continue;
-      // }
-
-      // int del = delivered.get(pid);
-      // for (int i = del; i <= range; i++) {
-      // seqNums.add(i);
-      // }
-
+      // Need to iterate over all to know eventually clean up
       for (int i = 1; i <= range; i++) {
         seqNums.add(i);
       }
@@ -190,10 +167,6 @@ public class FIFOBroadcast {
       for (int seqNum : seqNums) {
         int numAcks = ackedMessage.size(Message.hashCode(pid, seqNum));
         if (numAcks >= majority) {
-          // Message message = new Message(pid, seqNum);
-          // System.out.println("Heartbeat urbDeliver packet: "
-          // + message.toString() + " numAcks: " + numAcks
-          // + " delivered: " + delivered.contains(pid, seqNum));
           if (!delivered.contains(pid, seqNum)) {
             Message message = new Message(pid, seqNum);
             // System.out.println("Heartbeat urbDeliver packet: "
@@ -208,8 +181,6 @@ public class FIFOBroadcast {
         }
       }
     }
-
-    // System.out.println("Heartbeat finished check");
   }
 
   public void bebDeliver(Message message) throws IOException {
@@ -222,10 +193,6 @@ public class FIFOBroadcast {
     // In response to broadcast ack / or new message
     // should receive acks from everyone
     if (message.getType() == MessageType.ACK_MESSAGE) {
-      // HashSet<Integer> acks = ackedMessage.get(message.hashCode());
-      // Send ack again ?
-
-      // if (acks != null && !acks.contains(message.getRelayPort())) {
       message.setRelayMessage(MessageType.ACK_MESSAGE, srcPort, message.getRelayPort());
 
       // System.out.println("beb deliver P2P sending ACK: " + message.toString()
@@ -238,7 +205,6 @@ public class FIFOBroadcast {
 
     // Forward message with ACK (the first time receives this message)
     if (!forwarded.contains(message.getPid(), message.getSeqNum())) {
-      // System.out.println("bebDeliver: " + message.toString());
       ackedMessage.put(message.hashCode(), ackValues);
       // System.out
       // .println("bebDeliver ackedMessage for: " + message.toString() + " acksupdate:
@@ -268,26 +234,10 @@ public class FIFOBroadcast {
     // Don't remove last message from delivered keep the last message in the
     // history !
 
-    /* finished = ! */ackedMessage.remove(message.hashCode());
+    ackedMessage.remove(message.hashCode());
     pendingAcks.remove(pid, seqNum);
     int range = delivered.get(pid);
     forwarded.cleanUp(pid, range);
-
-    // seqNum--;
-    // // TODO create new object ?
-    // message.setSeqNum(seqNum);
-
-    // while (seqNum > 0 && !finished) {
-    // // remove returns true if it hasn't been removed yet
-    // finished = !ackedMessage.remove(message.hashCode());
-    // pendingAcks.remove(pid, seqNum);
-
-    // seqNum--;
-    // message.setSeqNum(seqNum);
-    // }
-
-    // var f = new Forwarded(forwarded.get(pid));
-    // System.err.println("cleanUp forwarded: " + f);
   }
 
   public ArrayList<String> getLogs() {

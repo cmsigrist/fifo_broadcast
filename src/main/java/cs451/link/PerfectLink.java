@@ -22,8 +22,6 @@ public class PerfectLink {
     private final int srcPort;
     // UDP channel associated to the link
     private final UDPChannel UDPChannel;
-    // TODO optimise such that message are resent in seqNum order
-    // private final AtomicMapOfSet<Message, PendingAck> pendingAcks;
     private final PendingMap pendingAcks;
 
     // List containing the keys of messages that were acked
@@ -51,9 +49,6 @@ public class PerfectLink {
     // Sends a single message
     public void send(Message message) throws IOException {
         try {
-            // System.out.println("sending: " + message.toString() + " to : " +
-            // message.getDestPort());
-
             PendingAck pendingAck = new PendingAck(message.getType(), message.getDestPort());
             pendingAcks.put(message.getPid(), message.getSeqNum(), pendingAck);
 
@@ -64,8 +59,6 @@ public class PerfectLink {
     }
 
     public void P2PSend(Message message) throws IOException {
-        // System.out.println("P2P sending message: " + message + " to: " +
-        // message.getDestPort());
         byte[] p = message.marshall();
         DatagramPacket d = new DatagramPacket(p, p.length, InetAddress.getByName(srcIP),
                 message.getDestPort());
@@ -98,7 +91,6 @@ public class PerfectLink {
     }
 
     private synchronized void deliver(Message message) throws IOException {
-        // System.out.println("P2P deliver: " + message.toString());
         pendingAcks.removePendingAck(
                 message.getPid(),
                 message.getSeqNum(),
@@ -106,13 +98,11 @@ public class PerfectLink {
 
         lock.lock();
         try {
-            // System.err.println("deliver WakeUp !");
             notFull.signal();
         } finally {
             lock.unlock();
         }
 
-        // System.out.println("P2P deliver pendingAcks.size: " + pendingAcks.size());
         bebDeliverQueue.offer(message);
     }
 
@@ -133,7 +123,7 @@ public class PerfectLink {
                 Message message = new Message(MessageType.ACK_MESSAGE, pid, seqNum);
                 message.setRelayPort(srcPort);
 
-                for (PendingAck p : pending) { // TODO Concurrent modif
+                for (PendingAck p : pending) {
                     if (p.hasTimedOut()) {
 
                         pendingAcks.acquireLock();
@@ -144,7 +134,6 @@ public class PerfectLink {
 
                             if (stillPending) {
                                 try {
-                                    // message.setType(p.getType());
                                     message.setDestPort(p.getDestPort());
 
                                     // System.out.println(
