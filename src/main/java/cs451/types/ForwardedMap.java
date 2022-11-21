@@ -3,11 +3,11 @@ package cs451.types;
 import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class AtomicMap {
+public class ForwardedMap {
   private final HashMap<Byte, Forwarded> map;
   private final ReentrantLock lock;
 
-  public AtomicMap() {
+  public ForwardedMap() {
     this.map = new HashMap<>();
     this.lock = new ReentrantLock();
   }
@@ -25,10 +25,10 @@ public class AtomicMap {
     return copy;
   }
 
-  public void put(Byte key, int seqNum) {
+  public void put(byte pid, int seqNum) {
     lock.lock();
     try {
-      Forwarded forwarded = map.get(key);
+      Forwarded forwarded = map.get(pid);
 
       if (forwarded == null) {
         forwarded = new Forwarded(seqNum);
@@ -36,18 +36,18 @@ public class AtomicMap {
         forwarded.update(seqNum);
       }
 
-      map.put(key, forwarded);
+      map.put(pid, forwarded);
     } finally {
       lock.unlock();
     }
   }
 
-  public Forwarded get(Byte key) {
+  public Forwarded get(byte pid) {
     Forwarded value;
 
     lock.lock();
     try {
-      value = map.get(key);
+      value = map.get(pid);
     } finally {
       lock.unlock();
     }
@@ -55,18 +55,29 @@ public class AtomicMap {
     return value;
   }
 
-  public boolean contains(Byte key, int seqNum) {
+  public boolean contains(byte pid, int seqNum) {
     boolean contains = false;
 
     lock.lock();
     try {
-      if (map.containsKey(key)) {
-        contains = map.get(key).contains(seqNum);
+      if (map.containsKey(pid)) {
+        contains = map.get(pid).contains(seqNum);
       }
     } finally {
       lock.unlock();
     }
 
     return contains;
+  }
+
+  public void cleanUp(byte pid, int range) {
+    lock.lock();
+    try {
+      if (map.containsKey(pid)) {
+        map.get(pid).cleanUp(range);
+      }
+    } finally {
+      lock.unlock();
+    }
   }
 }

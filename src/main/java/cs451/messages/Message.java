@@ -26,6 +26,11 @@ public class Message {
         this.seqNum = seqNum;
     }
 
+    public Message(Message message) {
+        this.pid = message.getPid();
+        this.seqNum = message.getSeqNum();
+    }
+
     public byte getType() {
         return type;
     }
@@ -106,6 +111,22 @@ public class Message {
         return message;
     }
 
+    /*
+     * ByteArrayOutputStream bos = new ByteArrayOutputStream();
+     * ObjectOutputStream oos = new ObjectOutputStream(bos);
+     * oos.writeObject(object);
+     * oos.flush();
+     * oos.close();
+     * bos.close();
+     * byte[] byteData = bos.toByteArray();
+     * 
+     * Restore your class from a stream of bytes:
+     * 
+     * ByteArrayInputStream bais = new ByteArrayInputStream(byteData);
+     * Object object = new ObjectInputStream(bais).readObject();
+     * 
+     */
+
     @Override
     public String toString() {
         StringBuilder stringBuilder = new StringBuilder();
@@ -115,16 +136,15 @@ public class Message {
                 .append(" seqNum: ")
                 .append(seqNum);
 
-        return "{" + type + " : pid: " + Integer.valueOf(pid + 1).toString() + " seqNum: " + seqNum + " from: "
-                + relayPort + "}";
+        return "{" + type + " : pid: " + (pid + 1) + " seqNum: " + seqNum + "}";
     }
 
     public String delivered() {
-        return "d " + Integer.valueOf(pid + 1).toString() + " " + seqNum + "\n";
+        return "d " + (pid + 1) + " " + seqNum + "\n";
     }
 
     public static String delivered(byte pid, int seqNum) {
-        return "d " + Integer.valueOf(pid + 1).toString() + " " + seqNum + "\n";
+        return "d " + (pid + 1) + " " + seqNum + "\n";
     }
 
     public String broadcast() {

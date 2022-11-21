@@ -3,54 +3,54 @@ package cs451.types;
 import java.util.ArrayList;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class AtomicArrayList<T> {
-  private final ArrayList<T> elements;
+public class Logs {
+  private final ArrayList<String> elements;
   private final ReentrantLock lock;
 
-  public AtomicArrayList() {
+  public Logs() {
     this.elements = new ArrayList<>();
     this.lock = new ReentrantLock();
   }
 
-  public void add(T e) {
+  public void add(String s) {
     lock.lock();
 
     try {
-      elements.add(e);
+      elements.add(s);
     } finally {
       lock.unlock();
     }
   }
 
-  public void remove(T e) {
+  public void remove(String s) {
     lock.lock();
 
     try {
-      elements.remove(e);
+      elements.remove(s);
     } finally {
       lock.unlock();
     }
   }
 
-  public void addIfNotInArray(T e) {
+  public void addIfNotInArray(String s) {
     lock.lock();
 
     try {
-      if (!elements.contains(e)) {
-        elements.add(e);
+      if (!elements.contains(s)) {
+        elements.add(s);
       }
     } finally {
       lock.unlock();
     }
   }
 
-  public ArrayList<T> snapshot() {
-    ArrayList<T> copy = new ArrayList<>();
+  public ArrayList<String> snapshot() {
+    ArrayList<String> copy = new ArrayList<>();
     lock.lock();
 
     try {
-      for (T e : elements) {
-        copy.add(e);
+      for (String s : elements) {
+        copy.add(s);
       }
     } finally {
       lock.unlock();
@@ -59,11 +59,11 @@ public class AtomicArrayList<T> {
     return copy;
   }
 
-  public ArrayList<T> nonAtomicSnapshot() {
-    ArrayList<T> copy = new ArrayList<>();
+  public ArrayList<String> nonAtomicSnapshot() {
+    ArrayList<String> copy = new ArrayList<>();
 
-    for (T e : elements) {
-      copy.add(e);
+    for (String s : elements) {
+      copy.add(s);
     }
 
     return copy;

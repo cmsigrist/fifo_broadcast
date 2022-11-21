@@ -44,7 +44,7 @@ public class Node implements NodeInterface {
         }
 
         deliverThread = new Thread(() -> {
-            System.out.println("Pid: " + Integer.valueOf(pid + 1).toString() + " starting to listen");
+            System.out.println("Pid: " + (pid + 1) + " starting to listen");
 
             while (true) {
                 try {

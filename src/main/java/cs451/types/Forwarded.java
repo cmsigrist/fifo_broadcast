@@ -17,12 +17,14 @@ public class Forwarded {
     }
   }
 
-  public void setRange(int range) {
-    this.range = range;
+  // TODO remove, for println only
+  public Forwarded(Forwarded f) {
+    this.range = f.getRange();
+    this.seqNums = new HashSet<>(f.getSeqNums());
   }
 
-  public void addSeqNum(int seqNum) {
-    seqNums.add(seqNum);
+  public void setRange(int range) {
+    this.range = range;
   }
 
   public int getRange() {
@@ -36,13 +38,14 @@ public class Forwarded {
   public void update(int seqNum) {
     if (range + 1 == seqNum) {
       range += 1;
-    } else {
+    } else if (seqNum > range + 1) {
       seqNums.add(seqNum);
     }
 
     cleanUp();
   }
 
+  // Add all seqNums that is continuous to range and remove from seqNums
   private void cleanUp() {
     boolean continuous = true;
 
@@ -54,6 +57,18 @@ public class Forwarded {
         continuous = false;
       }
     }
+  }
+
+  // Remove all of delivered from seqNums, add all of delivered to range
+  public void cleanUp(int delivered) {
+    int i = range;
+
+    while (i <= delivered) {
+      seqNums.remove(i);
+      i++;
+    }
+
+    this.range = range > delivered ? range : delivered;
   }
 
   public boolean contains(int seqNum) {
