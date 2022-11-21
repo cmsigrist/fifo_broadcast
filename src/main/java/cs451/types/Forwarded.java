@@ -17,7 +17,7 @@ public class Forwarded {
     }
   }
 
-  // TODO remove, for println only
+  // Deep copy
   public Forwarded(Forwarded f) {
     this.range = f.getRange();
     this.seqNums = new HashSet<>(f.getSeqNums());
@@ -73,10 +73,5 @@ public class Forwarded {
 
   public boolean contains(int seqNum) {
     return seqNum <= range || seqNums.contains(seqNum);
-  }
-
-  @Override
-  public String toString() {
-    return "{range: " + range + " seqNums: " + seqNums + "}";
   }
 }

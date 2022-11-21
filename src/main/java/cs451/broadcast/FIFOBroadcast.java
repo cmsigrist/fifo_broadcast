@@ -71,7 +71,8 @@ public class FIFOBroadcast {
       seqNum += 1;
       Message message = new Message(MessageType.CHAT_MESSAGE, pid, seqNum);
 
-      System.out.println("Fifo broadcast seqNum " + seqNum + " pendingAcks.size: " + pendingAcks.size());
+      // System.out.println("Fifo broadcast seqNum " + seqNum + " pendingAcks.size: "
+      // + pendingAcks.size());
 
       while (pendingAcks.size() > PENDING_THRESHOLD) {
         notFull.await();
@@ -109,26 +110,20 @@ public class FIFOBroadcast {
   }
 
   public void deliver(byte pid, int seqNum) {
-    System.out.println("FIFO delivering message: " + "{pid: " + (pid + 1)
-        + " seqNum: " + seqNum + "}");
+    // System.out.println("FIFO delivering message: " + "{pid: " + (pid + 1)
+    // + " seqNum: " + seqNum + "}");
 
     delivered.put(pid, seqNum);
     logs.addIfNotInArray(Message.delivered(pid, seqNum));
   }
 
   public void urbDeliver(Message message) {
-    // System.err.println("urbdeliver delivered[" + (message.getPid() + 1) + "]: " +
-    // delivered.get(message.getPid()));
-
     if (!delivered.contains(message.getPid(), message.getSeqNum())) {
       int s = message.getSeqNum() - 1;
       byte pid = message.getPid();
       boolean d = false;
-      // TODO bug
+
       while (s > 0 && !d) {
-        // System.out.println("urbdeliver delivered message: " + "{ pid: " + (pid + 1)
-        // + " seqNum: " + s + "}" + " delivered.contains: "
-        // + delivered.contains(pid, s));
         if (delivered.contains(pid, s)) {
           d = true;
         } else {
@@ -150,7 +145,6 @@ public class FIFOBroadcast {
 
   public void heartbeat() {
     HashMap<Byte, Forwarded> forwardedSnapshot = new HashMap<>(forwarded.snapshot());
-    // System.out.println("Heartbeat forwarded: " + forwardedSnapshot);
 
     for (Byte pid : forwardedSnapshot.keySet()) {
       Forwarded f = new Forwarded(forwardedSnapshot.get(pid));
@@ -167,9 +161,6 @@ public class FIFOBroadcast {
         if (numAcks >= majority) {
           if (!delivered.contains(pid, seqNum)) {
             Message message = new Message(pid, seqNum);
-            // System.out.println("Heartbeat urbDeliver packet: "
-            // + message.toString() + " numAcks: " + numAcks
-            // + " delivered: " + delivered.contains(pid, seqNum));
             urbDeliver(message);
           }
 
@@ -192,30 +183,16 @@ public class FIFOBroadcast {
     // should receive acks from everyone
     if (message.getType() == MessageType.ACK_MESSAGE) {
       message.setRelayMessage(MessageType.ACK_MESSAGE, srcPort, message.getRelayPort());
-
-      // System.out.println("beb deliver P2P sending ACK: " + message.toString()
-      // + " to: " + message.getDestPort());
       p2pLink.P2PSend(message);
-
       ackedMessage.put(message.hashCode(), ackValues);
-      // }
     }
 
     // Forward message with ACK (the first time receives this message)
     if (!forwarded.contains(message.getPid(), message.getSeqNum())) {
       ackedMessage.put(message.hashCode(), ackValues);
-      // System.out
-      // .println("bebDeliver ackedMessage for: " + message.toString() + " acksupdate:
-      // "
-      // + ackedMessage.get(message.hashCode()));
-
       // set yourself as the relay and forward (broadcast) once the message
       forwarded.put(message.getPid(), message.getSeqNum());
-      // var f = new Forwarded(forwarded.get(message.getPid()));
-      // System.out.println("bebDeliver message: " + message.toString()
-      // + " forwarded: " + f);
       message.setRelayMessage(MessageType.ACK_MESSAGE, srcPort, message.getRelayPort());
-
       bebBroadcast(message);
     }
   }
@@ -226,12 +203,8 @@ public class FIFOBroadcast {
 
   private void cleanUp(byte pid, int seqNum) {
     Message message = new Message(pid, seqNum);
-    // System.out.println("Cleaning up: " + message.toString());
-    // boolean finished = false;
-
     // Don't remove last message from delivered keep the last message in the
     // history !
-
     ackedMessage.remove(message.hashCode());
     pendingAcks.remove(pid, seqNum);
     int range = delivered.get(pid);
