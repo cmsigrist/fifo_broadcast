@@ -64,7 +64,8 @@ public class FIFOBroadcast {
     // 100 * 5 * 5 = 2500 on the fly -> 74MiB
     // 2000 -> 74MiB
     // x * peer * peer = 1000
-    this.PENDING_THRESHOLD = 5; // 10 * 25 = 250 on the fly
+    this.PENDING_THRESHOLD = 250 / (peers.size() * peers.size()); // 10 * 25 = 250 on the fly
+    System.out.println("PENDING_THRESHOLD: " + PENDING_THRESHOLD);
   }
 
   public synchronized void broadcast(String payload) throws IOException, InterruptedException {
