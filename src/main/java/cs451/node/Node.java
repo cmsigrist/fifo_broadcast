@@ -5,16 +5,15 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.SocketException;
 import java.util.ArrayList;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import cs451.broadcast.FIFOBroadcast;
 import cs451.messages.Message;
 
-public class Node implements NodeInterface {
+public class Node {
     private final byte pid;
     private final String outputPath;
-    private final Queue<String> newMessages;
+    private final AtomicInteger toSend;
 
     private final FIFOBroadcast fifoBroadcast;
 
@@ -26,11 +25,11 @@ public class Node implements NodeInterface {
 
     // Can be extended using a list of hosts, instead of a single receiver (destIP,
     // destPort)
-    public Node(Host host, String outputPath, ArrayList<Host> peers, int numMessage) throws IOException {
+    public Node(Host host, String outputPath, ArrayList<Host> peers) throws IOException {
         // pid in [1, 128] shift of -1 so that it fits in a byte
         this.pid = Integer.valueOf(host.getId() - 1).byteValue();
-        this.newMessages = new ConcurrentLinkedQueue<>();
         this.outputPath = outputPath;
+        this.toSend = new AtomicInteger();
 
         String srcIP = host.getIp();
         int srcPort = host.getPort();
@@ -38,7 +37,7 @@ public class Node implements NodeInterface {
         System.out.println("Node IP: " + srcIP + " port: " + srcPort);
 
         try {
-            this.fifoBroadcast = new FIFOBroadcast(pid, srcIP, srcPort, peers);
+            this.fifoBroadcast = new FIFOBroadcast(pid, srcIP, srcPort, peers, toSend);
         } catch (SocketException e) {
             throw new SocketException("Error while creating node: " + e.getMessage());
         }
@@ -57,23 +56,18 @@ public class Node implements NodeInterface {
 
         sendThread = new Thread(() -> {
             while (true) {
-                // pop last message
-                String newMessage = newMessages.poll();
-
-                // send last message
-                if (newMessage != null) {
-                    try {
-                        fifoBroadcast.broadcast(newMessage);
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
+                try {
+                    fifoBroadcast.broadcast();
+                } catch (IOException | InterruptedException e) {
+                    throw new RuntimeException(e);
                 }
             }
+
         });
 
-        IPCThread = new Thread(() -> {
+        IPCThread = new Thread(() ->
+
+        {
             while (true) {
                 Message message = fifoBroadcast.getDeliverQueue().poll();
 
@@ -93,7 +87,7 @@ public class Node implements NodeInterface {
 
                 try {
                     Thread.sleep(300);
-                } catch (InterruptedException e) {
+                } catch (InterruptedException ignored) {
                 }
             }
         });
@@ -111,6 +105,7 @@ public class Node implements NodeInterface {
         });
 
         initSignalHandlers();
+
     }
 
     // Num threads: 7
@@ -122,7 +117,6 @@ public class Node implements NodeInterface {
     // Ack
     // IPC
 
-    @Override
     public void start() {
         System.out.println("Starting node");
         // Main thread (application thread)
@@ -134,16 +128,14 @@ public class Node implements NodeInterface {
         waitForAckThread.start();
     }
 
-    @Override
-    public void broadcastNewMessage(String payload) {
-        newMessages.offer(payload);
+    public void broadcastNewMessage() {
+        toSend.incrementAndGet();
     }
 
     public void initSignalHandlers() {
         Runtime.getRuntime().addShutdownHook(new Thread(this::writeOutput));
     }
 
-    @Override
     public void writeOutput() {
         System.out.println("Immediately stopping network packet processing.");
 

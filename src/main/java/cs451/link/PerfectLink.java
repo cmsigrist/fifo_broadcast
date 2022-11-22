@@ -6,10 +6,7 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Queue;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
 
 import cs451.messages.Message;
 import cs451.messages.MessageType;
@@ -27,11 +24,8 @@ public class PerfectLink {
     // List containing the keys of messages that were acked
     private final Queue<Message> bebDeliverQueue;
 
-    private final Lock lock;
-    private final Condition notFull;
-
     public PerfectLink(byte pid, String srcIp, int srcPort, PendingMap pendingAcks,
-            Queue<Message> bebDeliverQueue, Lock lock, Condition notFull) throws SocketException {
+            Queue<Message> bebDeliverQueue) throws SocketException {
         try {
             this.UDPChannel = new UDPChannel(srcIp, srcPort);
         } catch (SocketException e) {
@@ -42,8 +36,6 @@ public class PerfectLink {
         this.srcPort = srcPort;
         this.pendingAcks = pendingAcks;
         this.bebDeliverQueue = bebDeliverQueue;
-        this.lock = lock;
-        this.notFull = notFull;
     }
 
     // Sends a single message
@@ -70,7 +62,6 @@ public class PerfectLink {
         }
     }
 
-    // This thread loops until SIGTERM or SIGSTOP
     public void channelDeliver() throws IOException {
         try {
             DatagramPacket d = UDPChannel.receive();
@@ -90,36 +81,27 @@ public class PerfectLink {
         }
     }
 
-    private synchronized void deliver(Message message) throws IOException {
+    private void deliver(Message message) throws IOException {
         pendingAcks.removePendingAck(
                 message.getPid(),
                 message.getSeqNum(),
                 (PendingAck p) -> p.getDestPort() == message.getRelayPort());
-
-        lock.lock();
-        try {
-            notFull.signal();
-        } finally {
-            lock.unlock();
-        }
 
         bebDeliverQueue.offer(message);
     }
 
     // Sends all the message
     public void waitForAck() throws IOException, InterruptedException {
-        HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> pendingAcksCopy = new HashMap<>(pendingAcks.snapshot());
+        HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> pendingAcksCopy = pendingAcks.snapshot();
         // Snapshot
 
-        System.out.println("WaitForAck pendingAcks.size(): " + pendingAcks.size());
-        HashSet<Byte> pids = new HashSet<>(pendingAcksCopy.keySet());
+        // System.out.println("WaitForAck pendingAcks.size(): " + pendingAcks.size());
 
-        for (byte pid : pids) {
-            HashMap<Integer, ArrayList<PendingAck>> h = new HashMap<>(pendingAcksCopy.get(pid));
-            HashSet<Integer> seqNums = new HashSet<>(h.keySet());
-
-            for (int seqNum : seqNums) {
-                ArrayList<PendingAck> pending = new ArrayList<>(h.get(seqNum));
+        for (var pidEntry : pendingAcksCopy.entrySet()) {
+            for (var seqNumEntry : pidEntry.getValue().entrySet()) {
+                ArrayList<PendingAck> pending = seqNumEntry.getValue();
+                byte pid = pidEntry.getKey();
+                int seqNum = seqNumEntry.getKey();
                 Message message = new Message(MessageType.ACK_MESSAGE, pid, seqNum);
                 message.setRelayPort(srcPort);
 
@@ -127,7 +109,6 @@ public class PerfectLink {
                     if (p.hasTimedOut()) {
 
                         pendingAcks.acquireLock();
-
                         try {
                             // Check if it hasn't been acked in the meantime
                             boolean stillPending = pendingAcks.nonAtomicContains(pid, seqNum, p);
@@ -135,10 +116,6 @@ public class PerfectLink {
                             if (stillPending) {
                                 try {
                                     message.setDestPort(p.getDestPort());
-
-                                    // System.out.println(
-                                    // "WaitForAck resending: " + message.toString() + " to: " +
-                                    // message.getDestPort());
 
                                     P2PSend(message);
                                 } catch (IOException e) {

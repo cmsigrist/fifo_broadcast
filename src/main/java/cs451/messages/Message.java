@@ -98,22 +98,6 @@ public class Message {
         return message;
     }
 
-    /*
-     * ByteArrayOutputStream bos = new ByteArrayOutputStream();
-     * ObjectOutputStream oos = new ObjectOutputStream(bos);
-     * oos.writeObject(object);
-     * oos.flush();
-     * oos.close();
-     * bos.close();
-     * byte[] byteData = bos.toByteArray();
-     * 
-     * Restore your class from a stream of bytes:
-     * 
-     * ByteArrayInputStream bais = new ByteArrayInputStream(byteData);
-     * Object object = new ObjectInputStream(bais).readObject();
-     * 
-     */
-
     @Override
     public String toString() {
         StringBuilder stringBuilder = new StringBuilder();

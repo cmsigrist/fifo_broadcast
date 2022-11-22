@@ -5,9 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import cs451.link.PerfectLink;
 import cs451.messages.Message;
@@ -31,18 +29,18 @@ public class FIFOBroadcast {
   private final ForwardedMap forwarded;
   private final DeliveredMap delivered;
 
-  final Lock lock = new ReentrantLock();
-  final Condition notFull = lock.newCondition();
   private final Queue<Message> deliverQueue;
 
-  private int seqNum = 0;
   private final Logs logs;
 
   private final int majority;
 
-  private final int PENDING_THRESHOLD;
+  private int seqNum = 0;
+  private final AtomicInteger toSend;
+  private int pendingMessage = 0;
+  private final int MAX_PENDING;
 
-  public FIFOBroadcast(byte pid, String srcIP, int srcPort, ArrayList<Host> peers)
+  public FIFOBroadcast(byte pid, String srcIP, int srcPort, ArrayList<Host> peers, AtomicInteger toSend)
       throws IOException {
     this.pid = pid;
     this.srcPort = srcPort;
@@ -56,41 +54,53 @@ public class FIFOBroadcast {
 
     deliverQueue = new ConcurrentLinkedQueue<>();
 
-    this.p2pLink = new PerfectLink(pid, srcIP, srcPort, pendingAcks, deliverQueue, lock, notFull);
+    this.p2pLink = new PerfectLink(pid, srcIP, srcPort, pendingAcks, deliverQueue);
     logs = new Logs();
 
     this.majority = 1 + (peers.size() / 2);
+    this.toSend = toSend;
 
-    this.PENDING_THRESHOLD = 250 / (peers.size() * peers.size());
-    System.out.println("PENDING_THRESHOLD: " + PENDING_THRESHOLD);
+    int inFlightSize = peers.size() * peers.size();
+    MAX_PENDING = inFlightSize > 100 ? 1 : (100 / inFlightSize);
+    System.out.println("MAX_PENDING: " + MAX_PENDING);
   }
 
-  public synchronized void broadcast(String payload) throws IOException, InterruptedException {
-    lock.lock();
-    try {
-      seqNum += 1;
-      Message message = new Message(MessageType.CHAT_MESSAGE, pid, seqNum);
+  public void broadcast() throws IOException, InterruptedException {
+    // No new message to send
+    if (toSend.get() <= 0) {
+      return;
+    }
 
-      // System.out.println("Fifo broadcast seqNum " + seqNum + " pendingAcks.size: "
-      // + pendingAcks.size());
+    int del = delivered.get(pid);
+    toSend.decrementAndGet();
+    seqNum += 1;
 
-      while (pendingAcks.size() > PENDING_THRESHOLD) {
-        notFull.await();
+    Message message = new Message(MessageType.CHAT_MESSAGE, pid, seqNum);
+
+    // System.out.println("Fifo broadcast seqNum " + seqNum);
+
+    urbBroadcast(message);
+    // fifoBroadcast
+    logs.add(message.broadcast());
+    ackedMessage.put(message.hashCode(), srcPort);
+
+    pendingMessage += 1;
+
+    // Wait if MAX_PENDING messages are in flight and half have not been delivered
+    if (pendingMessage == MAX_PENDING) {
+      pendingMessage = 0;
+
+      int numTry = MAX_PENDING - 1;
+
+      while ((pendingAcks.size() > MAX_PENDING || delivered.get(pid) < del + MAX_PENDING) && numTry > 0) {
+        Thread.sleep(500);
+        numTry--;
       }
-
-      urbBroadcast(message);
-      // fifoBroadcast
-      logs.add(message.broadcast());
-
-      ackedMessage.put(message.hashCode(), srcPort);
-
-    } finally {
-      lock.unlock();
     }
   }
 
   public void urbBroadcast(Message message) throws IOException {
-    forwarded.get(pid).setRange(message.getSeqNum());
+    forwarded.put(pid, message.getSeqNum());
     bebBroadcast(message);
   }
 
@@ -158,6 +168,7 @@ public class FIFOBroadcast {
 
       for (int seqNum : seqNums) {
         int numAcks = ackedMessage.size(Message.hashCode(pid, seqNum));
+
         if (numAcks >= majority) {
           if (!delivered.contains(pid, seqNum)) {
             Message message = new Message(pid, seqNum);
@@ -203,8 +214,6 @@ public class FIFOBroadcast {
 
   private void cleanUp(byte pid, int seqNum) {
     Message message = new Message(pid, seqNum);
-    // Don't remove last message from delivered keep the last message in the
-    // history !
     ackedMessage.remove(message.hashCode());
     pendingAcks.remove(pid, seqNum);
     int range = delivered.get(pid);

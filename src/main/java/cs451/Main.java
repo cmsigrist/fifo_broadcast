@@ -45,12 +45,12 @@ public class Main {
         Node node;
 
         try {
-            node = new Node(host, parser.output(), peers, numMessage);
+            node = new Node(host, parser.output(), peers);
 
             node.start();
 
             for (int i = 1; i < numMessage + 1; i++) {
-                node.broadcastNewMessage(String.valueOf(i));
+                node.broadcastNewMessage();
             }
 
             System.out.println("Broadcasting and delivering messages...\n");

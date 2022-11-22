@@ -15,11 +15,21 @@ public class PendingMap {
   }
 
   public HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> snapshot() {
-    HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> copy;
+    HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> copy = new HashMap<>();
 
     lock.lock();
     try {
-      copy = new HashMap<>(map);
+      // copy = new HashMap<>(map);
+      for (var pid : map.entrySet()) {
+        HashMap<Integer, ArrayList<PendingAck>> hCopy = new HashMap<>();
+
+        for (var seqNum : pid.getValue().entrySet()) {
+          ArrayList<PendingAck> pCopy = new ArrayList<>(seqNum.getValue());
+          hCopy.put(seqNum.getKey(), pCopy);
+        }
+
+        copy.put(pid.getKey(), hCopy);
+      }
     } finally {
       lock.unlock();
     }
