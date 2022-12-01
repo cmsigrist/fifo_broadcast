@@ -29,10 +29,8 @@ public class LatticeAgreement {
   private final AckCount proposalNumbers;
   private final AckCount ackCount;
   private final AckCount nackCount;
-  // Number of retry for proposedValue during current step
-  // private AtomicInteger proposalNumber = new AtomicInteger();
-  // For the current step (ignore message not in the same step)
-  private final ValueSet proposedValue;
+  // TODO the sets are not updating correctly
+  // private final ValueSet proposedValue;
   private final ValueSet acceptedValue;
   private AtomicInteger step = new AtomicInteger();
 
@@ -67,7 +65,7 @@ public class LatticeAgreement {
 
     // For current step
     // this.proposalNumber.set(0);
-    this.proposedValue = new ValueSet();
+    // this.proposedValue = new ValueSet();
     this.acceptedValue = new ValueSet();
     this.step.set(0);
 
@@ -91,7 +89,7 @@ public class LatticeAgreement {
 
     String[] proposed = proposal.split(" ");
 
-    proposedValue.add(currentStep, proposed);
+    // proposedValue.add(currentStep, proposed);
     acceptedValue.add(currentStep, proposed);
 
     // I have seen the proposedValue
@@ -140,16 +138,10 @@ public class LatticeAgreement {
   }
 
   public void decide(int currentStep) {
-    // new consensus can start
-    // int newStep = step.incrementAndGet();
-    // String decided = ProposalMessage.decide(proposedValue.getToList(newStep -
-    // 1));
-    // System.out.println("decidedValue: " + proposedValue.get(newStep - 1) + "
-    // step: " + (newStep - 1));
-    // System.out.print("decided value: " + decided + " step: " + (newStep - 1));
-
-    String decided = ProposalMessage.decide(proposedValue.getToList(currentStep));
-    System.out.println("decidedValue: " + decided + " step: " + currentStep);
+    // String decided =
+    // ProposalMessage.decide(proposedValue.getToList(currentStep));
+    String decided = ProposalMessage.decide(acceptedValue.getToList(currentStep));
+    System.out.println("step: " + currentStep + " decidedValue: " + decided);
     logs.add(currentStep - 1, decided);
   }
 
@@ -186,6 +178,9 @@ public class LatticeAgreement {
   // TODO ignore message not in the same step ?
   public void processProposal(ProposalMessage proposalMessage, int currentStep, int currentProposalNumber)
       throws IOException {
+    System.out.println(Arrays.toString(proposalMessage.getProposal()) + " containsAll"
+        + acceptedValue.get(currentStep) + " ? : " + Arrays.asList(proposalMessage.getProposal())
+            .containsAll(acceptedValue.get(currentStep)));
     if (Arrays.asList(proposalMessage.getProposal())
         .containsAll(acceptedValue.get(currentStep))) {
       acceptedValue.add(currentStep, proposalMessage.getProposal());
@@ -200,7 +195,8 @@ public class LatticeAgreement {
           srcPort,
           proposalMessage.getRelayPort());
 
-      System.out.println("sending: " + ackMessage.toString());
+      System.out.println(
+          "sending: " + ackMessage.toString() + " for proposal: " + Arrays.toString(proposalMessage.getProposal()));
       p2pLink.send(ackMessage);
     } else {
       acceptedValue.add(currentStep, proposalMessage.getProposal());
@@ -222,6 +218,8 @@ public class LatticeAgreement {
 
   // Only process if in the same step
   public void processAck(ProposalMessage ackMessage, int currentStep, int currentProposalNumber) {
+    System.out.println("processAck: " + ackMessage.getProposalNumber() + " current: " + currentProposalNumber);
+
     if (ackMessage.getProposalNumber() == currentProposalNumber) {
       int newAckCount = ackCount.incrementAndGet(currentStep);
       System.out
@@ -229,7 +227,8 @@ public class LatticeAgreement {
       if (newAckCount >= majority) {
         decide(currentStep);
 
-        if (ackCount.get(currentStep) == peers.size()) {
+        // +1 since node is not in peer
+        if (ackCount.get(currentStep) == (peers.size() + 1)) {
           cleanUp(currentStep);
         }
       }
@@ -239,22 +238,28 @@ public class LatticeAgreement {
 
   public void processNack(ProposalMessage nackMessage, int currentStep, int currentProposalNumber)
       throws IOException, InterruptedException {
+    System.out.println("processNack: " + nackMessage.getProposalNumber() + " current: " + currentProposalNumber);
+
     if (nackMessage.getProposalNumber() == currentProposalNumber) {
       int newNackCount = nackCount.incrementAndGet(currentStep);
 
-      proposedValue.add(currentStep, nackMessage.getProposal());
+      // proposedValue.add(currentStep, nackMessage.getProposal());
+      acceptedValue.add(currentStep, nackMessage.getProposal());
 
       System.out.println("step: " + step + " proposalNumber: " + currentProposalNumber + " nackCount: " + newNackCount);
 
       if (newNackCount > 0 && ackCount.get(currentStep) + newNackCount >= majority) {
         currentProposalNumber = proposalNumbers.incrementAndGet(currentStep);
+        // String[] newProposal = proposedValue.getToList(currentStep);
+        String[] newProposal = acceptedValue.getToList(currentStep);
+        // acceptedValue.add(currentStep, newProposal);
 
         ackCount.set(currentStep, 1);
         nackCount.set(currentStep, 0);
 
         System.out.println("step: " + currentStep + " proposalNumber: " + currentProposalNumber + " reviewed proposal: "
-            + proposedValue.getToList(currentStep));
-        broadcast(proposedValue.getToList(currentStep), currentProposalNumber, currentStep);
+            + Arrays.toString(newProposal));
+        broadcast(newProposal, currentProposalNumber, currentStep);
       }
     }
   }
@@ -268,10 +273,11 @@ public class LatticeAgreement {
   }
 
   private void cleanUp(int step) {
+    System.out.println("cleaning up step: " + step);
     ackCount.remove(step);
     nackCount.remove(step);
     acceptedValue.remove(step);
-    proposedValue.remove(step);
+    // proposedValue.remove(step);
     proposalNumbers.remove(step);
   }
 

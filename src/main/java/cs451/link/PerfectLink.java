@@ -14,6 +14,7 @@ import cs451.types.PendingAck;
 import cs451.types.PendingMap;
 
 public class PerfectLink {
+    private final byte pid;
     private final String srcIP;
     private final int srcPort;
 
@@ -31,7 +32,7 @@ public class PerfectLink {
         } catch (SocketException e) {
             throw new SocketException(e.getMessage());
         }
-
+        this.pid = pid;
         this.srcIP = srcIp;
         this.srcPort = srcPort;
         this.pendingAcks = pendingAcks;
@@ -42,7 +43,7 @@ public class PerfectLink {
     public void send(ProposalMessage message) throws IOException {
         try {
             PendingAck pendingAck = new PendingAck(message);
-            pendingAcks.put(message.getPid(), message.getSeqNum(), pendingAck);
+            pendingAcks.put(message.getSeqNum(), pendingAck);
 
             P2PSend(message);
         } catch (IOException e) {
@@ -85,9 +86,9 @@ public class PerfectLink {
         // System.out.println("P2P deliver: " + message.toString());
 
         pendingAcks.removePendingAck(
-                message.getPid(),
                 message.getSeqNum(),
-                (PendingAck p) -> p.getDestPort() == message.getRelayPort());
+                (PendingAck p) -> p.getDestPort() == message.getRelayPort()
+                        && message.getPid() == pid);
 
         // var copy = pendingAcks.snapshot();
         // pendingAcks.acquireLock();
@@ -99,50 +100,45 @@ public class PerfectLink {
 
     // Sends all the message
     public void waitForAck() throws IOException, InterruptedException {
-        // TODO simplify PendingMap HashMap<int, ArrayList<>>
-        // only broadcast my message
-        HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> pendingAcksCopy = pendingAcks.snapshot();
+        HashMap<Integer, ArrayList<PendingAck>> pendingAcksCopy = pendingAcks.snapshot();
         // Snapshot
 
         // System.out.println("WaitForAck pendingAcks.size(): " + pendingAcks.size());
+        for (var seqNumEntry : pendingAcksCopy.entrySet()) {
+            ArrayList<PendingAck> pending = seqNumEntry.getValue();
+            int seqNum = seqNumEntry.getKey();
 
-        for (var pidEntry : pendingAcksCopy.entrySet()) {
-            for (var seqNumEntry : pidEntry.getValue().entrySet()) {
-                ArrayList<PendingAck> pending = seqNumEntry.getValue();
-                byte pid = pidEntry.getKey();
-                int seqNum = seqNumEntry.getKey();
+            for (PendingAck p : pending) {
+                if (p.hasTimedOut()) {
+                    // System.out.println("resending message: " + message + " to: " + p);
+                    pendingAcks.acquireLock();
+                    try {
+                        // Check if it hasn't been acked in the meantime
+                        boolean stillPending = pendingAcks.nonAtomicContains(seqNum, p);
 
-                for (PendingAck p : pending) {
-                    if (p.hasTimedOut()) {
-                        // System.out.println("resending message: " + message + " to: " + p);
-                        pendingAcks.acquireLock();
-                        try {
-                            // Check if it hasn't been acked in the meantime
-                            boolean stillPending = pendingAcks.nonAtomicContains(pid, seqNum, p);
+                        if (stillPending) {
+                            try {
+                                ProposalMessage message = p.getMessage(pid, seqNum);
+                                message.setRelayPort(srcPort);
+                                message.setDestPort(p.getDestPort());
 
-                            if (stillPending) {
-                                try {
-                                    ProposalMessage message = p.getMessage(pid, seqNum);
-                                    message.setRelayPort(srcPort);
-                                    message.setDestPort(p.getDestPort());
+                                System.out.println("ack timeout resending: " + message.toString());
 
-                                    // System.out.println("ack timeout resending: " + message.toString());
-
-                                    P2PSend(message);
-                                } catch (IOException e) {
-                                    System.out.println("Error while sending message: " + e.getMessage());
-                                }
-
-                                pendingAcks.nonAtomicRemove(pid, seqNum, p);
-                                p.resetTimeout();
-                                pendingAcks.put(pid, seqNum, p);
+                                P2PSend(message);
+                            } catch (IOException e) {
+                                System.out.println("Error while sending message: " + e.getMessage());
                             }
-                        } finally {
-                            pendingAcks.releaseLock();
+
+                            pendingAcks.nonAtomicRemove(seqNum, p);
+                            p.resetTimeout();
+                            pendingAcks.put(seqNum, p);
                         }
+                    } finally {
+                        pendingAcks.releaseLock();
                     }
                 }
             }
         }
+
     }
 }

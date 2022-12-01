@@ -6,8 +6,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
 public class PendingMap {
-  // HashMap<pid, HashMap<SeqNum, ArrayList<PendingAck>>
-  private final HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> map;
+  private final HashMap<Integer, ArrayList<PendingAck>> map;
   private final ReentrantLock lock;
 
   public PendingMap() {
@@ -15,21 +14,14 @@ public class PendingMap {
     this.lock = new ReentrantLock();
   }
 
-  public HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> snapshot() {
-    HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> copy = new HashMap<>();
+  public HashMap<Integer, ArrayList<PendingAck>> snapshot() {
+    HashMap<Integer, ArrayList<PendingAck>> copy = new HashMap<>();
 
     lock.lock();
     try {
-      // copy = new HashMap<>(map);
-      for (var pid : map.entrySet()) {
-        HashMap<Integer, ArrayList<PendingAck>> hCopy = new HashMap<>();
-
-        for (var seqNum : pid.getValue().entrySet()) {
-          ArrayList<PendingAck> pCopy = new ArrayList<>(seqNum.getValue());
-          hCopy.put(seqNum.getKey(), pCopy);
-        }
-
-        copy.put(pid.getKey(), hCopy);
+      for (var seqNum : map.entrySet()) {
+        ArrayList<PendingAck> pCopy = new ArrayList<>(seqNum.getValue());
+        copy.put(seqNum.getKey(), pCopy);
       }
     } finally {
       lock.unlock();
@@ -38,81 +30,48 @@ public class PendingMap {
     return copy;
   }
 
-  public void put(Byte pid, int seqNum, PendingAck pendingAck) {
+  public void put(int seqNum, PendingAck pendingAck) {
     lock.lock();
     try {
-      this.nonAtomicPut(pid, seqNum, pendingAck);
+      this.nonAtomicPut(seqNum, pendingAck);
     } finally {
       lock.unlock();
     }
   }
 
-  public void nonAtomicPut(byte pid, int seqNum, PendingAck pendingAck) {
-    HashMap<Integer, ArrayList<PendingAck>> h = map.get(pid);
-
-    if (h == null) {
-      h = new HashMap<>();
-    }
-
-    ArrayList<PendingAck> pendingAcks = h.get(seqNum);
+  public void nonAtomicPut(int seqNum, PendingAck pendingAck) {
+    ArrayList<PendingAck> pendingAcks = map.get(seqNum);
 
     if (pendingAcks == null) {
       pendingAcks = new ArrayList<>();
     }
 
     pendingAcks.add(pendingAck);
-    h.put(seqNum, pendingAcks);
-    map.put(pid, h);
+    map.put(seqNum, pendingAcks);
   }
 
-  public void removePendingAck(Byte pid, int seqNum, Predicate<PendingAck> pred) {
+  public void removePendingAck(int seqNum, Predicate<PendingAck> pred) {
     lock.lock();
     try {
-      HashMap<Integer, ArrayList<PendingAck>> h = map.get(pid);
-
-      if (h != null) {
-        ArrayList<PendingAck> pendingAcks = map.get(pid).get(seqNum);
-
-        if (pendingAcks != null) {
-          pendingAcks.removeIf(pred);
-
-          if (pendingAcks.isEmpty()) {
-            h.remove(seqNum);
-          }
-        }
-
-        if (h.isEmpty()) {
-          map.remove(pid);
-        }
-      }
-
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  public void remove(byte pid, int seqNum) {
-    lock.lock();
-    try {
-      HashMap<Integer, ArrayList<PendingAck>> h = map.get(pid);
-
-      if (h != null) {
-        h.remove(seqNum);
-      }
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  public void nonAtomicRemove(byte pid, int seqNum, PendingAck p) {
-    HashMap<Integer, ArrayList<PendingAck>> h = map.get(pid);
-
-    if (h != null) {
-      ArrayList<PendingAck> pendingAcks = map.get(pid).get(seqNum);
+      ArrayList<PendingAck> pendingAcks = map.get(seqNum);
 
       if (pendingAcks != null) {
-        pendingAcks.remove(p);
+        pendingAcks.removeIf(pred);
+
+        if (pendingAcks.isEmpty()) {
+          map.remove(seqNum);
+        }
       }
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  public void nonAtomicRemove(int seqNum, PendingAck p) {
+    ArrayList<PendingAck> pendingAcks = map.get(seqNum);
+
+    if (pendingAcks != null) {
+      pendingAcks.remove(p);
     }
   }
 
@@ -121,10 +80,8 @@ public class PendingMap {
 
     lock.lock();
     try {
-      for (HashMap<Integer, ArrayList<PendingAck>> h : map.values()) {
-        for (ArrayList<PendingAck> pendingAcks : h.values()) {
-          size += pendingAcks.size();
-        }
+      for (ArrayList<PendingAck> pendingAcks : map.values()) {
+        size += pendingAcks.size();
       }
     } finally {
       lock.unlock();
@@ -141,18 +98,13 @@ public class PendingMap {
     lock.unlock();
   }
 
-  public boolean nonAtomicContains(byte pid, int seqNum, PendingAck p) {
+  public boolean nonAtomicContains(int seqNum, PendingAck p) {
     boolean contains = false;
 
-    if (map.containsKey(pid)) {
-      HashMap<Integer, ArrayList<PendingAck>> h = map.get(pid);
-
-      if (h != null) {
-        ArrayList<PendingAck> pendingAcks = h.get(seqNum);
-
-        if (pendingAcks != null) {
-          return pendingAcks.contains(p);
-        }
+    if (map.containsKey(seqNum)) {
+      ArrayList<PendingAck> pendingAcks = map.get(seqNum);
+      if (pendingAcks != null) {
+        return pendingAcks.contains(p);
       }
     }
 
