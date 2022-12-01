@@ -20,11 +20,15 @@ public class Main {
         System.out.println("Doing some initialization\n");
 
         String conf = "";
+        ArrayList<String> proposals = new ArrayList<>();
+
         try {
             File myObj = new File(parser.config());
             Scanner scanner = new Scanner(myObj);
+            conf = scanner.nextLine();
+
             while (scanner.hasNextLine()) {
-                conf = scanner.nextLine();
+                proposals.add(scanner.nextLine());
             }
             scanner.close();
         } catch (FileNotFoundException e) {
@@ -33,7 +37,9 @@ public class Main {
 
         String[] config = conf.split(" ");
 
-        int numMessage = Integer.parseInt(config[0]);
+        int numProposal = Integer.parseInt(config[0]);
+        // int vs = Integer.parseInt(config[1]);
+        // int ds = Integer.parseInt(config[2]);
 
         Host host = parser.hosts().get(parser.myId() - 1);
 
@@ -45,12 +51,12 @@ public class Main {
         Node node;
 
         try {
-            node = new Node(host, parser.output(), peers);
+            node = new Node(host, parser.output(), peers, numProposal);
 
             node.start();
 
-            for (int i = 1; i < numMessage + 1; i++) {
-                node.broadcastNewMessage();
+            for (int i = 1; i < numProposal + 1; i++) {
+                node.broadcastNewMessage(proposals.get(i - 1));
             }
 
             System.out.println("Broadcasting and delivering messages...\n");

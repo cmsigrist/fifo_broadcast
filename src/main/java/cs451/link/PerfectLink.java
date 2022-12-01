@@ -8,8 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Queue;
 
-import cs451.messages.Message;
-import cs451.messages.MessageType;
+import cs451.messages.ProposalMessage;
 import cs451.network.UDPChannel;
 import cs451.types.PendingAck;
 import cs451.types.PendingMap;
@@ -17,15 +16,16 @@ import cs451.types.PendingMap;
 public class PerfectLink {
     private final String srcIP;
     private final int srcPort;
+
     // UDP channel associated to the link
     private final UDPChannel UDPChannel;
     private final PendingMap pendingAcks;
 
     // List containing the keys of messages that were acked
-    private final Queue<Message> bebDeliverQueue;
+    private final Queue<ProposalMessage> bebDeliverQueue;
 
     public PerfectLink(byte pid, String srcIp, int srcPort, PendingMap pendingAcks,
-            Queue<Message> bebDeliverQueue) throws SocketException {
+            Queue<ProposalMessage> bebDeliverQueue) throws SocketException {
         try {
             this.UDPChannel = new UDPChannel(srcIp, srcPort);
         } catch (SocketException e) {
@@ -39,9 +39,9 @@ public class PerfectLink {
     }
 
     // Sends a single message
-    public void send(Message message) throws IOException {
+    public void send(ProposalMessage message) throws IOException {
         try {
-            PendingAck pendingAck = new PendingAck(message.getType(), message.getDestPort());
+            PendingAck pendingAck = new PendingAck(message);
             pendingAcks.put(message.getPid(), message.getSeqNum(), pendingAck);
 
             P2PSend(message);
@@ -50,7 +50,7 @@ public class PerfectLink {
         }
     }
 
-    public void P2PSend(Message message) throws IOException {
+    public void P2PSend(ProposalMessage message) throws IOException {
         byte[] p = message.marshall();
         DatagramPacket d = new DatagramPacket(p, p.length, InetAddress.getByName(srcIP),
                 message.getDestPort());
@@ -73,7 +73,7 @@ public class PerfectLink {
                 return;
             }
 
-            Message message = Message.unmarshall(d);
+            ProposalMessage message = ProposalMessage.unmarshall(d);
             deliver(message);
 
         } catch (IOException e) {
@@ -81,17 +81,26 @@ public class PerfectLink {
         }
     }
 
-    private void deliver(Message message) throws IOException {
+    private void deliver(ProposalMessage message) throws IOException {
+        // System.out.println("P2P deliver: " + message.toString());
+
         pendingAcks.removePendingAck(
                 message.getPid(),
                 message.getSeqNum(),
                 (PendingAck p) -> p.getDestPort() == message.getRelayPort());
+
+        // var copy = pendingAcks.snapshot();
+        // pendingAcks.acquireLock();
+        // System.out.println("update pendingAcks: " + copy);
+        // pendingAcks.releaseLock();
 
         bebDeliverQueue.offer(message);
     }
 
     // Sends all the message
     public void waitForAck() throws IOException, InterruptedException {
+        // TODO simplify PendingMap HashMap<int, ArrayList<>>
+        // only broadcast my message
         HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> pendingAcksCopy = pendingAcks.snapshot();
         // Snapshot
 
@@ -102,12 +111,10 @@ public class PerfectLink {
                 ArrayList<PendingAck> pending = seqNumEntry.getValue();
                 byte pid = pidEntry.getKey();
                 int seqNum = seqNumEntry.getKey();
-                Message message = new Message(MessageType.ACK_MESSAGE, pid, seqNum);
-                message.setRelayPort(srcPort);
 
                 for (PendingAck p : pending) {
                     if (p.hasTimedOut()) {
-
+                        // System.out.println("resending message: " + message + " to: " + p);
                         pendingAcks.acquireLock();
                         try {
                             // Check if it hasn't been acked in the meantime
@@ -115,7 +122,11 @@ public class PerfectLink {
 
                             if (stillPending) {
                                 try {
+                                    ProposalMessage message = p.getMessage(pid, seqNum);
+                                    message.setRelayPort(srcPort);
                                     message.setDestPort(p.getDestPort());
+
+                                    // System.out.println("ack timeout resending: " + message.toString());
 
                                     P2PSend(message);
                                 } catch (IOException e) {

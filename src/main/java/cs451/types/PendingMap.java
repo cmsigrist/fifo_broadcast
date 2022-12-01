@@ -6,6 +6,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
 public class PendingMap {
+  // HashMap<pid, HashMap<SeqNum, ArrayList<PendingAck>>
   private final HashMap<Byte, HashMap<Integer, ArrayList<PendingAck>>> map;
   private final ReentrantLock lock;
 

@@ -4,41 +4,19 @@ import java.util.ArrayList;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Logs {
-  private final ArrayList<String> elements;
+  private final String[] elements;
   private final ReentrantLock lock;
 
-  public Logs() {
-    this.elements = new ArrayList<>();
+  public Logs(int size) {
+    this.elements = new String[size];
     this.lock = new ReentrantLock();
   }
 
-  public void add(String s) {
+  public void add(int step, String s) {
     lock.lock();
 
     try {
-      elements.add(s);
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  public void remove(String s) {
-    lock.lock();
-
-    try {
-      elements.remove(s);
-    } finally {
-      lock.unlock();
-    }
-  }
-
-  public void addIfNotInArray(String s) {
-    lock.lock();
-
-    try {
-      if (!elements.contains(s)) {
-        elements.add(s);
-      }
+      elements[step] = s;
     } finally {
       lock.unlock();
     }

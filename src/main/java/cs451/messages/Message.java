@@ -6,11 +6,11 @@ import java.util.Arrays;
 import java.util.StringJoiner;
 
 public class Message {
+    private byte type;
     // process that sent the message
     private final byte pid;
     private final int seqNum;
 
-    private byte type;
     private int relayPort;
     private int destPort;
 
@@ -18,6 +18,14 @@ public class Message {
         this.type = type;
         this.pid = pid;
         this.seqNum = seqNum;
+    }
+
+    public Message(byte type, byte pid, int seqNum, int relayPort, int destPort) {
+        this.type = type;
+        this.pid = pid;
+        this.seqNum = seqNum;
+        this.relayPort = relayPort;
+        this.destPort = destPort;
     }
 
     // Used to clean up
@@ -67,6 +75,7 @@ public class Message {
                 .add(Byte.toString(type))
                 .add(Byte.toString(pid))
                 .add(Integer.toString(seqNum));
+
         byte[] payload = stringJoiner.toString().getBytes();
         short packetLength = (short) payload.length;
 

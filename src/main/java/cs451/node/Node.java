@@ -5,17 +5,18 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.SocketException;
 import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
-import cs451.broadcast.FIFOBroadcast;
-import cs451.messages.Message;
+import cs451.lattice.LatticeAgreement;
+import cs451.messages.ProposalMessage;
 
 public class Node {
     private final byte pid;
     private final String outputPath;
-    private final AtomicInteger toSend;
+    private final Queue<String> newMessages;
 
-    private final FIFOBroadcast fifoBroadcast;
+    private final LatticeAgreement latticeAgreement;
 
     Thread deliverThread;
     Thread sendThread;
@@ -25,11 +26,12 @@ public class Node {
 
     // Can be extended using a list of hosts, instead of a single receiver (destIP,
     // destPort)
-    public Node(Host host, String outputPath, ArrayList<Host> peers) throws IOException {
+    public Node(Host host, String outputPath, ArrayList<Host> peers, int numProposal) throws IOException {
         // pid in [1, 128] shift of -1 so that it fits in a byte
         this.pid = Integer.valueOf(host.getId() - 1).byteValue();
         this.outputPath = outputPath;
-        this.toSend = new AtomicInteger();
+        // this.toSend = new AtomicInteger();
+        this.newMessages = new ConcurrentLinkedQueue<>();
 
         String srcIP = host.getIp();
         int srcPort = host.getPort();
@@ -37,7 +39,7 @@ public class Node {
         System.out.println("Node IP: " + srcIP + " port: " + srcPort);
 
         try {
-            this.fifoBroadcast = new FIFOBroadcast(pid, srcIP, srcPort, peers, toSend);
+            this.latticeAgreement = new LatticeAgreement(pid, srcIP, srcPort, peers, numProposal);
         } catch (SocketException e) {
             throw new SocketException("Error while creating node: " + e.getMessage());
         }
@@ -47,7 +49,7 @@ public class Node {
 
             while (true) {
                 try {
-                    fifoBroadcast.channelDeliver();
+                    latticeAgreement.channelDeliver();
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
@@ -56,46 +58,49 @@ public class Node {
 
         sendThread = new Thread(() -> {
             while (true) {
-                try {
-                    fifoBroadcast.broadcast();
-                } catch (IOException | InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
+                // pop last message
+                String newMessage = newMessages.poll();
 
-        });
-
-        IPCThread = new Thread(() ->
-
-        {
-            while (true) {
-                Message message = fifoBroadcast.getDeliverQueue().poll();
-
-                if (message != null) {
+                // send last message
+                if (newMessage != null) {
                     try {
-                        fifoBroadcast.bebDeliver(message);
-                    } catch (IOException e) {
+                        latticeAgreement.propose(newMessage);
+                    } catch (IOException | InterruptedException e) {
                         throw new RuntimeException(e);
                     }
                 }
             }
         });
 
-        heartbeatThread = new Thread(() -> {
+        IPCThread = new Thread(() -> {
             while (true) {
-                fifoBroadcast.heartbeat();
+                ProposalMessage message = latticeAgreement.getDeliverQueue().poll();
 
-                try {
-                    Thread.sleep(300);
-                } catch (InterruptedException ignored) {
+                if (message != null) {
+                    try {
+                        latticeAgreement.deliver(message);
+                    } catch (IOException | InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }
         });
 
+        // heartbeatThread = new Thread(() -> {
+        // while (true) {
+        // fifoBroadcast.heartbeat();
+
+        // try {
+        // Thread.sleep(300);
+        // } catch (InterruptedException ignored) {
+        // }
+        // }
+        // });
+
         waitForAckThread = new Thread(() -> {
             while (true) {
                 try {
-                    fifoBroadcast.waitForAck();
+                    latticeAgreement.waitForAck();
 
                     Thread.sleep(400);
                 } catch (IOException | InterruptedException e) {
@@ -121,15 +126,16 @@ public class Node {
         System.out.println("Starting node");
         // Main thread (application thread)
         // Interrupt thread
-        sendThread.start();
         deliverThread.start();
+        sendThread.start();
         IPCThread.start();
-        heartbeatThread.start();
+        // heartbeatThread.start(); -> Not needed in lattice agreement
         waitForAckThread.start();
     }
 
-    public void broadcastNewMessage() {
-        toSend.incrementAndGet();
+    public void broadcastNewMessage(String proposal) {
+        // toSend.incrementAndGet();
+        newMessages.offer(proposal);
     }
 
     public void initSignalHandlers() {
@@ -141,7 +147,7 @@ public class Node {
 
         // write/flush output file if necessary
         System.out.println("Writing output.");
-        ArrayList<String> logs = fifoBroadcast.getLogs();
+        ArrayList<String> logs = latticeAgreement.getLogs();
 
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath));

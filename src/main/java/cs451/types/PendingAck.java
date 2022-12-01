@@ -3,18 +3,28 @@ package cs451.types;
 import java.time.Duration;
 import java.time.Instant;
 
+import cs451.messages.ProposalMessage;
+
 public class PendingAck {
     private final byte type;
     private final int destPort;
+    private final String[] proposal;
+    private final int proposalNumber;
+    private final int step;
+
     private Instant start;
     private int timeout;
     private int attemptNumber;
     public static final int ACK_TIMEOUT = 500; // in milliseconds
     public static final int BACK_OFF = 10; // in milliseconds
 
-    public PendingAck(byte type, int destPort) {
-        this.type = type;
-        this.destPort = destPort;
+    public PendingAck(ProposalMessage message) {
+        this.type = message.getType();
+        this.destPort = message.getDestPort();
+        this.proposal = message.getProposal();
+        this.proposalNumber = message.getProposalNumber();
+        this.step = message.getStep();
+
         this.start = Instant.now();
         this.timeout = ACK_TIMEOUT;
         this.attemptNumber = 1;
@@ -24,8 +34,24 @@ public class PendingAck {
         return type;
     }
 
+    public String[] getProposal() {
+        return proposal;
+    }
+
+    public int getProposalNumber() {
+        return proposalNumber;
+    }
+
+    public int getStep() {
+        return step;
+    }
+
     public int getDestPort() {
         return destPort;
+    }
+
+    public ProposalMessage getMessage(byte pid, int seqNum) {
+        return new ProposalMessage(type, pid, seqNum, proposal, proposalNumber, step);
     }
 
     public int getTimeOut() {
