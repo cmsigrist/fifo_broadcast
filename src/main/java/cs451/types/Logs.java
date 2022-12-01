@@ -41,7 +41,9 @@ public class Logs {
     ArrayList<String> copy = new ArrayList<>();
 
     for (String s : elements) {
-      copy.add(s);
+      if (s != null) {
+        copy.add(s);
+      }
     }
 
     return copy;
