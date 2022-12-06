@@ -2,6 +2,8 @@ package cs451.types;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
@@ -56,6 +58,26 @@ public class PendingMap {
       ArrayList<PendingAck> pendingAcks = map.get(seqNum);
 
       if (pendingAcks != null) {
+        pendingAcks.removeIf(pred);
+
+        if (pendingAcks.isEmpty()) {
+          map.remove(seqNum);
+        }
+      }
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  public void removeStep(int step) {
+    Predicate<PendingAck> pred = (PendingAck p) -> p.getStep() == step;
+
+    lock.lock();
+    try {
+      Set<Integer> keys = new HashSet<>(map.keySet());
+
+      for (var seqNum : keys) {
+        ArrayList<PendingAck> pendingAcks = map.get(seqNum);
         pendingAcks.removeIf(pred);
 
         if (pendingAcks.isEmpty()) {

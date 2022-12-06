@@ -55,8 +55,8 @@ public class Main {
 
             node.start();
 
-            for (int i = 1; i < numProposal + 1; i++) {
-                node.broadcastNewMessage(proposals.get(i - 1));
+            for (int i = 0; i < numProposal; i++) {
+                node.broadcastNewMessage(proposals.get(i));
             }
 
             System.out.println("Broadcasting and delivering messages...\n");

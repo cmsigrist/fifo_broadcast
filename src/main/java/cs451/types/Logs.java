@@ -16,7 +16,9 @@ public class Logs {
     lock.lock();
 
     try {
-      elements[step] = s;
+      if (elements[step] == null) {
+        elements[step] = s;
+      }
     } finally {
       lock.unlock();
     }

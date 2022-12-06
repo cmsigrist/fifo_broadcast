@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Queue;
 
+import cs451.messages.MessageType;
 import cs451.messages.ProposalMessage;
 import cs451.network.UDPChannel;
 import cs451.types.PendingAck;
@@ -84,11 +85,27 @@ public class PerfectLink {
 
     private void deliver(ProposalMessage message) throws IOException {
         // System.out.println("P2P deliver: " + message.toString());
+        // var copy = pendingAcks.snapshot();
+        // pendingAcks.acquireLock();
+        // System.out.println("current pendingAcks: " + copy);
+        // pendingAcks.releaseLock();
 
-        pendingAcks.removePendingAck(
-                message.getSeqNum(),
-                (PendingAck p) -> p.getDestPort() == message.getRelayPort()
-                        && message.getPid() == pid);
+        if (message.getType() == MessageType.ACK_MESSAGE ||
+                message.getType() == MessageType.NACK_MESSAGE) {
+            pendingAcks.removePendingAck(
+                    message.getSeqNum(),
+                    (PendingAck p) -> p.getDestPort() == message.getRelayPort()
+                            && p.getType() == MessageType.PROPOSAL_MESSAGE);
+        }
+
+        if (message.getType() == MessageType.ACK_RESPONSE_MESSAGE) {
+            pendingAcks.removePendingAck(
+                    message.getSeqNum(),
+                    (PendingAck p) -> p.getDestPort() == message.getRelayPort()
+                            && (p.getType() == MessageType.ACK_MESSAGE
+                                    || p.getType() == MessageType.NACK_MESSAGE));
+            return;
+        }
 
         // var copy = pendingAcks.snapshot();
         // pendingAcks.acquireLock();
