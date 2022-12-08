@@ -120,14 +120,12 @@ public class PerfectLink {
         HashMap<Integer, ArrayList<PendingAck>> pendingAcksCopy = pendingAcks.snapshot();
         // Snapshot
 
-        // System.out.println("WaitForAck pendingAcks.size(): " + pendingAcks.size());
         for (var seqNumEntry : pendingAcksCopy.entrySet()) {
             ArrayList<PendingAck> pending = seqNumEntry.getValue();
             int seqNum = seqNumEntry.getKey();
 
             for (PendingAck p : pending) {
                 if (p.hasTimedOut()) {
-                    // System.out.println("resending message: " + message + " to: " + p);
                     pendingAcks.acquireLock();
                     try {
                         // Check if it hasn't been acked in the meantime

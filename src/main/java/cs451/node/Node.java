@@ -7,6 +7,9 @@ import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 import cs451.lattice.LatticeAgreement;
 import cs451.messages.ProposalMessage;
@@ -24,13 +27,12 @@ public class Node {
     Thread heartbeatThread;
     Thread waitForAckThread;
 
-    // Can be extended using a list of hosts, instead of a single receiver (destIP,
-    // destPort)
-    public Node(Host host, String outputPath, ArrayList<Host> peers, int numProposal) throws IOException {
+    public Node(Host host, String outputPath, ArrayList<Host> peers, int numProposal, AtomicInteger step,
+            ReentrantLock lock,
+            Condition full) throws IOException {
         // pid in [1, 128] shift of -1 so that it fits in a byte
         this.pid = Integer.valueOf(host.getId() - 1).byteValue();
         this.outputPath = outputPath;
-        // this.toSend = new AtomicInteger();
         this.newMessages = new ConcurrentLinkedQueue<>();
 
         String srcIP = host.getIp();
@@ -39,7 +41,7 @@ public class Node {
         System.out.println("Node IP: " + srcIP + " port: " + srcPort);
 
         try {
-            this.latticeAgreement = new LatticeAgreement(pid, srcIP, srcPort, peers, numProposal);
+            this.latticeAgreement = new LatticeAgreement(pid, srcIP, srcPort, peers, numProposal, step, lock, full);
         } catch (SocketException e) {
             throw new SocketException("Error while creating node: " + e.getMessage());
         }
@@ -86,17 +88,6 @@ public class Node {
             }
         });
 
-        // heartbeatThread = new Thread(() -> {
-        // while (true) {
-        // fifoBroadcast.heartbeat();
-
-        // try {
-        // Thread.sleep(300);
-        // } catch (InterruptedException ignored) {
-        // }
-        // }
-        // });
-
         waitForAckThread = new Thread(() -> {
             while (true) {
                 try {
@@ -113,12 +104,11 @@ public class Node {
 
     }
 
-    // Num threads: 7
+    // Num threads: 6
     // Main
     // Interrupt
     // Send
     // Deliver
-    // Heartbeat
     // Ack
     // IPC
 
@@ -129,12 +119,10 @@ public class Node {
         deliverThread.start();
         sendThread.start();
         IPCThread.start();
-        // heartbeatThread.start(); -> Not needed in lattice agreement
         waitForAckThread.start();
     }
 
     public void broadcastNewMessage(String proposal) {
-        // toSend.incrementAndGet();
         newMessages.offer(proposal);
     }
 
@@ -147,7 +135,7 @@ public class Node {
 
         // write/flush output file if necessary
         System.out.println("Writing output.");
-        ArrayList<String> logs = latticeAgreement.getLogs();
+        String[] logs = latticeAgreement.getLogs();
 
         try {
             BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath));

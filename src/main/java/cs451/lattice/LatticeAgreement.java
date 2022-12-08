@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -15,9 +14,9 @@ import cs451.link.PerfectLink;
 import cs451.messages.MessageType;
 import cs451.messages.ProposalMessage;
 import cs451.node.Host;
-import cs451.types.AckCount;
 import cs451.types.Logs;
 import cs451.types.PendingMap;
+import cs451.types.StepMap;
 import cs451.types.ValueSet;
 
 public class LatticeAgreement {
@@ -27,12 +26,12 @@ public class LatticeAgreement {
   private final PerfectLink p2pLink;
 
   // Ack and nack count for a step
-  private final AckCount proposalNumbers;
-  private final AckCount ackCount;
-  private final AckCount nackCount;
+  private final StepMap proposalNumbers;
+  private final StepMap ackCount;
+  // private final StepMap nackCount;
 
   private final ValueSet acceptedValue;
-  private AtomicInteger step = new AtomicInteger();
+  private AtomicInteger step;
 
   private final PendingMap pendingAcks;
   private final Queue<ProposalMessage> deliverQueue;
@@ -41,29 +40,31 @@ public class LatticeAgreement {
   private final int majority;
 
   private AtomicInteger seqNum = new AtomicInteger();
-  private final int MAX_PENDING;
 
-  final Lock lock = new ReentrantLock();
-  final Condition full = lock.newCondition();
+  final Lock lock;
+  final Condition full;
 
   public LatticeAgreement(
       byte pid,
       String srcIP,
       int srcPort,
       ArrayList<Host> peers,
-      int numProposal) throws IOException {
+      int numProposal,
+      AtomicInteger step,
+      ReentrantLock lock,
+      Condition full) throws IOException {
     this.pid = pid;
     this.srcPort = srcPort;
     this.peers = peers;
 
     this.seqNum.set(0);
 
-    this.proposalNumbers = new AckCount();
-    this.ackCount = new AckCount();
-    this.nackCount = new AckCount();
+    this.proposalNumbers = new StepMap();
+    this.ackCount = new StepMap();
+    // this.nackCount = new StepMap();
+    this.step = step;
 
     this.acceptedValue = new ValueSet();
-    this.step.set(1);
 
     this.pendingAcks = new PendingMap();
     this.deliverQueue = new ConcurrentLinkedQueue<>();
@@ -73,9 +74,8 @@ public class LatticeAgreement {
 
     this.majority = 1 + (peers.size() / 2);
 
-    int inFlightSize = peers.size() * peers.size();
-    MAX_PENDING = inFlightSize > 100 ? 1 : (100 / inFlightSize);
-    System.out.println("MAX_PENDING: " + MAX_PENDING);
+    this.lock = lock;
+    this.full = full;
   }
 
   // Uses beBroadcast
@@ -89,19 +89,9 @@ public class LatticeAgreement {
 
     // I have seen the proposedValue
     ackCount.set(currentStep, 1);
-    nackCount.set(currentStep, 0);
+    // nackCount.set(currentStep, 0);
 
     broadcast(proposed, currentProposalNumber, currentStep);
-
-    lock.lock();
-    try {
-      while (currentStep == step.get()) {
-        full.await(1, TimeUnit.SECONDS);
-        System.out.println("WOKE UP!");
-      }
-    } finally {
-      lock.unlock();
-    }
   }
 
   public void broadcast(String[] proposal, int proposalNumber, int step)
@@ -231,12 +221,9 @@ public class LatticeAgreement {
     int currentStep = step.get();
 
     if (messageStep == currentStep && nackMessage.getProposalNumber() == currentProposalNumber) {
-      int newNackCount = nackCount.incrementAndGet(messageStep);
+      // int newNackCount = nackCount.incrementAndGet(messageStep);
 
       acceptedValue.add(messageStep, nackMessage.getProposal());
-
-      System.out.println(
-          "step: " + messageStep + " proposalNumber: " + currentProposalNumber + " nackCount: " + newNackCount);
 
       // Send new proposal as soon as received a nack ?
       // Clean up pendingAcks !
@@ -247,7 +234,7 @@ public class LatticeAgreement {
       String[] newProposal = acceptedValue.getToList(messageStep);
 
       ackCount.set(messageStep, 1);
-      nackCount.set(messageStep, 0);
+      // nackCount.set(messageStep, 0);
 
       System.out.println("step: " + messageStep + " proposalNumber: " + currentProposalNumber + " reviewed proposal: "
           + Arrays.toString(newProposal));
@@ -267,7 +254,7 @@ public class LatticeAgreement {
   private void cleanUp(int step) {
     System.out.println("cleaning up step: " + step);
     ackCount.remove(step);
-    nackCount.remove(step);
+    // nackCount.remove(step);
     acceptedValue.remove(step);
     proposalNumbers.remove(step);
   }
@@ -276,8 +263,8 @@ public class LatticeAgreement {
     p2pLink.waitForAck();
   }
 
-  public ArrayList<String> getLogs() {
-    return logs.nonAtomicSnapshot();
+  public String[] getLogs() {
+    return logs.snapshot();
   }
 
   public Queue<ProposalMessage> getDeliverQueue() {

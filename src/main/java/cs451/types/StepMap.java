@@ -3,11 +3,11 @@ package cs451.types;
 import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class AckCount {
+public class StepMap {
   private final HashMap<Integer, Integer> map;
   private final ReentrantLock lock;
 
-  public AckCount() {
+  public StepMap() {
     this.map = new HashMap<>();
     this.lock = new ReentrantLock();
   }

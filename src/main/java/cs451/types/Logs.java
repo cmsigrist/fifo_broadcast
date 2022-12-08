@@ -1,51 +1,35 @@
 package cs451.types;
 
-import java.util.ArrayList;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Logs {
   private final String[] elements;
   private final ReentrantLock lock;
+  private int size;
 
   public Logs(int size) {
     this.elements = new String[size];
     this.lock = new ReentrantLock();
+    this.size = 0;
   }
 
   public void add(int step, String s) {
     lock.lock();
 
     try {
-      if (elements[step] == null) {
-        elements[step] = s;
-      }
+      elements[step] = s;
+      size += 1;
     } finally {
       lock.unlock();
     }
   }
 
-  public ArrayList<String> snapshot() {
-    ArrayList<String> copy = new ArrayList<>();
-    lock.lock();
+  public String[] snapshot() {
+    System.out.println("size: " + size);
+    String[] copy = new String[size];
 
-    try {
-      for (String s : elements) {
-        copy.add(s);
-      }
-    } finally {
-      lock.unlock();
-    }
-
-    return copy;
-  }
-
-  public ArrayList<String> nonAtomicSnapshot() {
-    ArrayList<String> copy = new ArrayList<>();
-
-    for (String s : elements) {
-      if (s != null) {
-        copy.add(s);
-      }
+    for (int i = 0; i < size; i++) {
+      copy[i] = elements[i];
     }
 
     return copy;
