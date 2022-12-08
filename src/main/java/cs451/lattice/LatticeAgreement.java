@@ -63,6 +63,7 @@ public class LatticeAgreement {
     this.ackCount = new StepMap();
     // this.nackCount = new StepMap();
     this.step = step;
+    step.set(1);
 
     this.acceptedValue = new ValueSet();
 

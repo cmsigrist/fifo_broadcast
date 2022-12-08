@@ -31,7 +31,6 @@ public class Main {
         final ReentrantLock lock = new ReentrantLock();
         final Condition full = lock.newCondition();
         final AtomicInteger step = new AtomicInteger();
-        step.set(1);
 
         System.out.println("Initializing node\n");
         Node node;
