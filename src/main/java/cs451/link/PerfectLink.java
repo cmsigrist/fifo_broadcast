@@ -84,12 +84,6 @@ public class PerfectLink {
     }
 
     private void deliver(ProposalMessage message) throws IOException {
-        // System.out.println("P2P deliver: " + message.toString());
-        // var copy = pendingAcks.snapshot();
-        // pendingAcks.acquireLock();
-        // System.out.println("current pendingAcks: " + copy);
-        // pendingAcks.releaseLock();
-
         if (message.getType() == MessageType.ACK_MESSAGE ||
                 message.getType() == MessageType.NACK_MESSAGE) {
             pendingAcks.removePendingAck(
@@ -106,11 +100,6 @@ public class PerfectLink {
                                     || p.getType() == MessageType.NACK_MESSAGE));
             return;
         }
-
-        // var copy = pendingAcks.snapshot();
-        // pendingAcks.acquireLock();
-        // System.out.println("update pendingAcks: " + copy);
-        // pendingAcks.releaseLock();
 
         bebDeliverQueue.offer(message);
     }
@@ -136,8 +125,6 @@ public class PerfectLink {
                                 ProposalMessage message = p.getMessage(pid, seqNum);
                                 message.setRelayPort(srcPort);
                                 message.setDestPort(p.getDestPort());
-
-                                System.out.println("ack timeout resending: " + message.toString());
 
                                 P2PSend(message);
                             } catch (IOException e) {

@@ -56,7 +56,6 @@ public class Main {
                 try {
                     while (currentStep == step.get()) {
                         full.await(1, TimeUnit.SECONDS);
-                        System.out.println("WOKE UP!");
                     }
                 } finally {
                     lock.unlock();
